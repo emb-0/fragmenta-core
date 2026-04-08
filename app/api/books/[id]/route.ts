@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { getBook, updateBook, deleteBook } from '@/lib/supabase/db';
+import { transformBook } from '@/lib/api/ios-compat';
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -20,7 +21,18 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       );
     }
 
-    return Response.json({ data: book, error: null });
+    // iOS expects { book, stats } wrapper (BookMetadataPayload)
+    return Response.json({
+      data: {
+        book: transformBook(book),
+        stats: {
+          highlight_count: book.highlight_count,
+          note_count: book.note_count,
+          avg_highlights_per_session: null,
+        },
+      },
+      error: null,
+    });
   } catch (err) {
     console.error('Get book error:', err);
     return Response.json(
@@ -65,7 +77,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     const updated = await updateBook(id, { canonical_title, canonical_author });
-    return Response.json({ data: updated, error: null });
+    return Response.json({ data: transformBook(updated), error: null });
   } catch (err) {
     console.error('Update book error:', err);
     const message = err instanceof Error ? err.message : 'Internal server error';

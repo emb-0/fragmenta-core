@@ -101,9 +101,9 @@ This explicitly sets Turbopack's root to the project directory, overriding the i
 
 ---
 
-## iOS client — base URL guidance
+## iOS client integration
 
-The iOS app communicates with Fragmenta's API. Base URL depends on where you are running:
+### Base URL
 
 | Scenario | Base URL |
 |---|---|
@@ -112,6 +112,60 @@ The iOS app communicates with Fragmenta's API. Base URL depends on where you are
 | Production | `https://fragmenta.vercel.app` (or your custom domain) |
 
 To find your Mac's local IP: `System Settings > Wi-Fi > Details > IP Address`, or run `ipconfig getifaddr en0`.
+
+### Health check
+
+Before any other calls, the iOS app should verify backend reachability:
+
+```
+GET /api/health → { data: { ok: true, environment, timestamp, version, features: { ... } } }
+```
+
+The `features` object tells you which optional integrations are configured:
+- `google_books_configured` — cover art enrichment available
+- `anthropic_configured` — AI book summaries available
+- `supabase_configured` — core database available
+
+### Response envelope
+
+All API responses use: `{ data: T | null, error: { message, code } | null }`.
+
+List endpoints wrap data in: `{ data: { items/books/highlights/...: [...], pagination: { page, limit, total, has_more, next_page } } }`.
+
+The iOS client uses `convertFromSnakeCase` decoding. All response keys are snake_case.
+
+### iOS-specific routes (Sprint 8)
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/health` | Backend health + feature flags |
+| `GET` | `/api/insights/reading` | Combined reading insights (totals, activity, top books, top passages) |
+| `GET` | `/api/books/[id]/collections` | Collections containing a book |
+| `GET` | `/api/books/[id]/related-highlights` | Related highlights from other books (stub — returns empty) |
+| `GET` | `/api/highlights/[id]/share-card` | Primary share card endpoint (PNG download) |
+
+### Field name compatibility
+
+Book responses include both canonical and short field names:
+- `canonical_title` + `title` — both present
+- `canonical_author` + `author` — both present
+- `cover` — object `{ cover_url, thumbnail_url }` or null
+- `source` — always `"kindle_export"` for now
+
+Collection responses include both:
+- `name` + `title`
+- `description` + `summary`
+
+Highlight responses include:
+- `note_text` + `note` — both present
+
+### Device testing workflow
+
+1. Start the dev server: `npm run dev`
+2. On the iOS app, set the base URL to your Mac's local IP
+3. Call `GET /api/health` to confirm connectivity
+4. If using Simulator, `http://localhost:3000` works directly
+5. For physical device: ensure Mac firewall allows port 3000
 
 All API endpoints are under `/api/`. See the [API Reference](#api-reference) section below for exact contracts.
 
@@ -201,8 +255,15 @@ app/
     stats/activity/route.ts             # GET  - activity timeline
     stats/books/route.ts                # GET  - top books by highlights
     share/highlight/[id]/route.tsx      # GET  - OG image share card
+    health/route.ts                     # GET  - health check + feature flags (Sprint 8)
+    insights/reading/route.ts           # GET  - combined reading insights (Sprint 8)
+    books/[id]/collections/route.ts     # GET  - collections containing book (Sprint 8)
+    books/[id]/related-highlights/route.ts # GET - related highlights stub (Sprint 8)
+    highlights/[id]/share-card/route.ts # GET  - share card alias for iOS (Sprint 8)
 lib/
   types.ts                              # All TypeScript types
+  api/
+    ios-compat.ts                       # iOS response compatibility transforms (Sprint 8)
   parser/
     index.ts                            # Auto-detection + preview
     kindle.ts                           # My Clippings.txt parser
@@ -233,6 +294,7 @@ test/
   api-editing.test.ts                   # Editing API contract tests (22)
   google-books.test.ts                  # Google Books matching + enrichment tests (24)
   sprint6.test.ts                       # Sprint 6: collections, stats, share, AI, PWA (20)
+  sprint8-ios-compat.test.ts            # Sprint 8: iOS compat transforms + pagination (25)
   fixtures/kindle-notebook-real.txt     # Real fixture file
 sample/
   kindle-export.txt                     # Sample My Clippings export
@@ -243,6 +305,14 @@ sample/
 ## API Reference
 
 All responses use the envelope: `{ data: T | null, error: { message, code } | null }`.
+
+List endpoints include pagination: `{ data: { items: [...], pagination: { page, limit, total, has_more, next_page } } }`.
+
+### Health
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/health` | Backend health check, environment, feature flags |
 
 ### Import
 
@@ -282,12 +352,15 @@ All responses use the envelope: `{ data: T | null, error: { message, code } | nu
 | `GET` | `/api/books/[id]/highlights` | `limit`, `offset`, `sort` (sequence\|recent), `has_notes` | Paginated highlights |
 | `POST` | `/api/books/merge` | `{ "keep_id": "...", "merge_id": "..." }` | Merge duplicate books |
 | `POST` | `/api/books/enrich` | `{ "book_id": "..." }` or `{ "backfill": true, "limit": 50 }` | Enrich via Google Books |
+| `GET` | `/api/books/[id]/collections` | `page`, `limit` | Collections containing this book |
+| `GET` | `/api/books/[id]/related-highlights` | `page`, `limit` | Related highlights (stub) |
 
 ### Highlights
 
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/api/highlights/[id]` | Single highlight with book info |
+| `GET` | `/api/highlights/[id]/share-card` | Download share card PNG (iOS primary) |
 | `PATCH` | `/api/highlights/[id]` | Update highlight text/note (`{ "text": "...", "note_text": "..." }`) |
 | `DELETE` | `/api/highlights/[id]` | Delete highlight (updates book counts) |
 | `GET` | `/api/random` | Random highlight with book info |
@@ -327,8 +400,9 @@ Returns both matching highlights and matching books (by title/author).
 | `GET` | `/api/stats/overview` | | Book, highlight, note counts + avg per book |
 | `GET` | `/api/stats/activity` | `months` (default 6) | Highlights per month timeline |
 | `GET` | `/api/stats/books` | `limit` (default 10) | Top books by highlight count |
+| `GET` | `/api/insights/reading` | | Combined insights for iOS (totals, activity, top books, passages) |
 
-The `/insights` page renders stats via direct Supabase queries in a server component (no API round-trip).
+The `/insights` page renders stats via direct Supabase queries in a server component (no API round-trip). The `/api/insights/reading` endpoint combines all stats into a single iOS-friendly response.
 
 ### AI Book Summaries
 
@@ -426,3 +500,6 @@ Reading stats/insights page with server-side parallel queries (book/highlight/no
 
 ### Sprint 7: Stability, environment, and dev/prod parity
 Local environment hardening for multi-machine development. Updated `.env.example` with all required and optional vars. Added `instrumentation.ts` for server-startup env validation (fails loudly on missing required vars, graceful degradation for optional vars). Fixed Next.js Turbopack workspace-root warning via `turbopack.root` in `next.config.ts`. README rewritten with new-machine setup guide, env var documentation, iOS base URL guidance, and consolidated API reference. Build and tests validated on Mac mini.
+
+### Sprint 8: iOS runtime alignment
+Backend contract reconciliation for the native iOS client. Deep audit of all 23 fragmenta-ios API endpoints against fragmenta-core route handlers revealed 16 contract mismatches. Added `lib/api/ios-compat.ts` with response transformation helpers (book, highlight, collection, search result, pagination). Added 5 new routes: `/api/health` (connectivity + feature flags), `/api/insights/reading` (combined insights), `/api/books/[id]/collections`, `/api/books/[id]/related-highlights` (stub), `/api/highlights/[id]/share-card`. Updated 12 existing routes with: pagination metadata (`{ page, limit, total, has_more, next_page }`), field name aliases (`title`/`author`/`note`/`cover` alongside canonical names), iOS request body compatibility (`raw_text` accepted alongside `text`), sort parameter mapping, page-based pagination alongside offset-based. 123 tests (25 new for iOS compatibility transforms).

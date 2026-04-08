@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { getHighlight, updateHighlight, deleteHighlight } from '@/lib/supabase/db';
+import { transformHighlight } from '@/lib/api/ios-compat';
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -20,7 +21,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       );
     }
 
-    return Response.json({ data: highlight, error: null });
+    return Response.json({
+      data: transformHighlight(highlight, highlight.book),
+      error: null,
+    });
   } catch (err) {
     console.error('Get highlight error:', err);
     return Response.json(

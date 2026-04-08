@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { getCollection, updateCollection, deleteCollection } from '@/lib/supabase/db';
+import { transformCollection, transformBooks } from '@/lib/api/ios-compat';
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -20,7 +21,22 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       );
     }
 
-    return Response.json({ data: collection, error: null });
+    // iOS CollectionDetail expects: title, summary, tags, books, book_count
+    return Response.json({
+      data: {
+        ...collection,
+        // iOS aliases
+        title: collection.name,
+        summary: collection.description,
+        tags: [],
+        book_count: collection.books.length,
+        highlight_count: 0,
+        note_count: 0,
+        // Transform books for iOS
+        books: transformBooks(collection.books),
+      },
+      error: null,
+    });
   } catch (err) {
     console.error('Get collection error:', err);
     return Response.json(
@@ -48,7 +64,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     const body = await req.json();
-    const { name, description } = body;
+    const name = body.name || body.title;
+    const description = body.description ?? body.summary;
 
     if (name !== undefined && (typeof name !== 'string' || !name.trim())) {
       return Response.json(
@@ -65,7 +82,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     const updated = await updateCollection(id, { name, description });
-    return Response.json({ data: updated, error: null });
+    return Response.json({ data: { ...updated, title: updated.name, summary: updated.description, tags: [] }, error: null });
   } catch (err) {
     console.error('Update collection error:', err);
     const message = err instanceof Error ? err.message : 'Internal server error';

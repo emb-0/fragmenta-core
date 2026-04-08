@@ -21,13 +21,15 @@ export async function POST(request: NextRequest) {
       filename = file.name;
     } else {
       const body = await request.json();
-      if (!body.text || typeof body.text !== 'string') {
+      // Accept both web (text) and iOS (raw_text) field names
+      const text = body.text || body.raw_text;
+      if (!text || typeof text !== 'string') {
         return Response.json(
           { data: null, error: { message: 'Missing "text" field in request body', code: 'MISSING_TEXT' } },
           { status: 400 },
         );
       }
-      rawText = body.text;
+      rawText = text;
       filename = body.filename;
     }
 
@@ -59,8 +61,23 @@ export async function POST(request: NextRequest) {
 
     return Response.json({
       data: {
+        // iOS-expected fields
         import_id: importRecord.id,
-        summary,
+        status: 'completed',
+        summary: {
+          books_detected: summary.books_found,
+          highlights_detected: summary.highlights_found,
+          notes_detected: summary.notes_found,
+          duplicates_detected: summary.highlights_skipped_duplicate,
+          warnings_count: summary.warnings.length,
+          warnings: summary.warnings,
+        },
+        books_created: summary.books_created,
+        books_updated: summary.books_existing,
+        created_at: importRecord.created_at,
+        completed_at: new Date().toISOString(),
+        filename: filename || null,
+        message: null,
       },
       error: null,
     });

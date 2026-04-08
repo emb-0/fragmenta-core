@@ -1,6 +1,19 @@
 import type { NextRequest } from 'next/server';
-import { getBook, generateAndCacheBookSummary, getBookSummary } from '@/lib/supabase/db';
+import { getBook, generateAndCacheBookSummary } from '@/lib/supabase/db';
 import { createServerClient } from '@/lib/supabase/client';
+
+function summaryResponse(summary: { summary: string; updated_at: string; model: string; highlight_count_at_generation: number }) {
+  return {
+    // iOS-expected fields
+    summary: summary.summary,
+    themes: [],
+    updated_at: summary.updated_at,
+    // Original fields (kept for backward compat)
+    model: summary.model,
+    generated_at: summary.updated_at,
+    highlight_count: summary.highlight_count_at_generation,
+  };
+}
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -33,15 +46,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       );
     }
 
-    return Response.json({
-      data: {
-        summary: summary.summary,
-        model: summary.model,
-        generated_at: summary.updated_at,
-        highlight_count: summary.highlight_count_at_generation,
-      },
-      error: null,
-    });
+    return Response.json({ data: summaryResponse(summary), error: null });
   } catch (err) {
     console.error('Get book summary error:', err);
     return Response.json(
@@ -92,15 +97,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       );
     }
 
-    return Response.json({
-      data: {
-        summary: summary.summary,
-        model: summary.model,
-        generated_at: summary.updated_at,
-        highlight_count: summary.highlight_count_at_generation,
-      },
-      error: null,
-    });
+    return Response.json({ data: summaryResponse(summary), error: null });
   } catch (err) {
     console.error('Regenerate book summary error:', err);
     return Response.json(
