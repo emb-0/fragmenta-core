@@ -103,28 +103,53 @@ This explicitly sets Turbopack's root to the project directory, overriding the i
 
 ## iOS client integration
 
-### Base URL
+### Production backend (default)
 
-| Scenario | Base URL |
-|---|---|
-| Simulator on same Mac as dev server | `http://localhost:3000` |
-| Physical device on same Wi-Fi as dev server | `http://<your-mac-local-ip>:3000` (e.g. `http://192.168.1.x:3000`) |
-| Production | `https://fragmenta.vercel.app` (or your custom domain) |
+The iOS app should point to the production backend by default:
 
-To find your Mac's local IP: `System Settings > Wi-Fi > Details > IP Address`, or run `ipconfig getifaddr en0`.
+```
+https://fragmenta-core.vercel.app
+```
+
+This is the canonical backend for both Simulator and physical-device testing. It is always running the latest `main` deploy and requires no local setup.
 
 ### Health check
 
 Before any other calls, the iOS app should verify backend reachability:
 
 ```
-GET /api/health → { data: { ok: true, environment, timestamp, version, features: { ... } } }
+GET https://fragmenta-core.vercel.app/api/health
 ```
 
-The `features` object tells you which optional integrations are configured:
-- `google_books_configured` — cover art enrichment available
-- `anthropic_configured` — AI book summaries available
-- `supabase_configured` — core database available
+Returns:
+```json
+{
+  "data": {
+    "ok": true,
+    "environment": "production",
+    "timestamp": "2026-04-08T22:30:39.820Z",
+    "version": "23eb35d",
+    "features": {
+      "google_books_configured": true,
+      "anthropic_configured": false,
+      "supabase_configured": true
+    }
+  }
+}
+```
+
+The `version` field is the deployed git commit SHA. The `features` object tells you which optional integrations are live.
+
+### Local backend (optional, dev-only)
+
+Only needed when developing backend changes locally. Not required for iOS testing.
+
+| Scenario | Base URL |
+|---|---|
+| Simulator on same Mac | `http://localhost:3000` |
+| Physical device on same Wi-Fi | `http://<your-mac-local-ip>:3000` |
+
+To find your Mac's local IP: run `ipconfig getifaddr en0`. Ensure Mac firewall allows port 3000.
 
 ### Response envelope
 
@@ -159,13 +184,12 @@ Collection responses include both:
 Highlight responses include:
 - `note_text` + `note` — both present
 
-### Device testing workflow
+### iOS testing against production
 
-1. Start the dev server: `npm run dev`
-2. On the iOS app, set the base URL to your Mac's local IP
-3. Call `GET /api/health` to confirm connectivity
-4. If using Simulator, `http://localhost:3000` works directly
-5. For physical device: ensure Mac firewall allows port 3000
+1. In the iOS app, set base URL to `https://fragmenta-core.vercel.app`
+2. Call `GET /api/health` — confirm `ok: true` and check `version`
+3. All `/api/*` routes are available — no local backend needed
+4. To switch to local dev: change base URL to `http://localhost:3000` and run `npm run dev`
 
 All API endpoints are under `/api/`. See the [API Reference](#api-reference) section below for exact contracts.
 
@@ -503,3 +527,6 @@ Local environment hardening for multi-machine development. Updated `.env.example
 
 ### Sprint 8: iOS runtime alignment
 Backend contract reconciliation for the native iOS client. Deep audit of all 23 fragmenta-ios API endpoints against fragmenta-core route handlers revealed 16 contract mismatches. Added `lib/api/ios-compat.ts` with response transformation helpers (book, highlight, collection, search result, pagination). Added 5 new routes: `/api/health` (connectivity + feature flags), `/api/insights/reading` (combined insights), `/api/books/[id]/collections`, `/api/books/[id]/related-highlights` (stub), `/api/highlights/[id]/share-card`. Updated 12 existing routes with: pagination metadata (`{ page, limit, total, has_more, next_page }`), field name aliases (`title`/`author`/`note`/`cover` alongside canonical names), iOS request body compatibility (`raw_text` accepted alongside `text`), sort parameter mapping, page-based pagination alongside offset-based. 123 tests (25 new for iOS compatibility transforms).
+
+### Sprint 9: Production-default backend for iOS
+Verified all Sprint 8 iOS-compat routes live on production (`https://fragmenta-core.vercel.app`). Confirmed `/api/health` returns commit `23eb35d`, environment `production`, and correct feature flags. Verified `/api/books`, `/api/insights/reading`, `/api/search`, `/api/collections`, `/api/imports` all return Sprint 8 response shapes (pagination, field aliases) on production. Updated README to make production backend the default for iOS testing — local backend is now documented as optional/dev-only.
