@@ -44,9 +44,14 @@ export default async function LibraryPage({
       <div className="section-header">
         <div className="flex items-center justify-between" style={{ marginBottom: 'var(--sp-xs)' }}>
           <p className="text-eyebrow">Collection</p>
-          <Link href="/import" className="chip" style={{ fontSize: 'var(--font-chip)' }}>
-            + Import
-          </Link>
+          <div className="flex items-center gap-1">
+            <Link href="/bookshelf" className="chip" style={{ fontSize: 'var(--font-chip)' }}>
+              Shelf view
+            </Link>
+            <Link href="/import" className="chip" style={{ fontSize: 'var(--font-chip)' }}>
+              + Import
+            </Link>
+          </div>
         </div>
         <h1 className="text-large-title text-text-1">Library</h1>
       </div>

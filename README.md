@@ -44,6 +44,7 @@ cp .env.example .env.local
 | `NEXT_PUBLIC_SUPABASE_URL` | Your Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon/public key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (Dashboard > Settings > API) |
+| `GOOGLE_BOOKS_API_KEY` | Google Books API key (server-side only, for cover enrichment) |
 
 ### 3. Run database migrations
 
@@ -51,6 +52,7 @@ Apply migration files via the Supabase SQL Editor:
 
 - `supabase/migrations/001_initial_schema.sql`
 - `supabase/migrations/002_sprint2_enhancements.sql`
+- `supabase/migrations/003_sprint5_enrichment.sql`
 
 ### 4. Run locally
 
@@ -89,7 +91,8 @@ app/
   layout.tsx                            # Root layout: sticky nav, ambient glows, footer
   import/page.tsx                       # Import with preview-first flow
   library/page.tsx                      # Book library with chip sort/filter
-  books/[id]/page.tsx                   # Book detail: hero card, highlight cards
+  bookshelf/page.tsx                    # Cover-based visual bookshelf grid
+  books/[id]/page.tsx                   # Book detail: hero card, cover, highlight cards
   search/page.tsx                       # Full search page with filters
   random/page.tsx                       # Random highlight discovery
   imports/page.tsx                      # Import history
@@ -101,6 +104,9 @@ app/
     highlight-editor.tsx                # Client: inline edit/delete highlights
     highlight-list.tsx                  # Client: highlight list with editing
     book-editor.tsx                     # Client: edit/delete/merge books
+    book-cover.tsx                      # Client: cover image with fallback
+    enrich-button.tsx                   # Client: trigger Google Books lookup
+    backfill-button.tsx                 # Client: batch enrich from bookshelf
   api/
     imports/kindle/route.ts             # POST - import highlights
     imports/kindle/preview/route.ts     # POST - preview import (dry run)
@@ -110,6 +116,7 @@ app/
     books/[id]/route.ts                 # GET, PATCH, DELETE - single book
     books/[id]/highlights/route.ts      # GET  - highlights for book
     books/merge/route.ts                # POST - merge duplicate books
+    books/enrich/route.ts               # POST - enrich book(s) via Google Books
     highlights/[id]/route.ts            # GET, PATCH, DELETE - single highlight
     search/route.ts                     # GET  - search highlights + books
     random/route.ts                     # GET  - random highlight
@@ -123,16 +130,22 @@ lib/
     kindle.ts                           # My Clippings.txt parser
     kindle-notebook.ts                  # Kindle notebook parser
     canonicalize.ts                     # Title/author normalization
+  google-books/
+    index.ts                            # Google Books module exports
+    client.ts                           # API client + result extraction
+    match.ts                            # Jaccard scoring + confidence
   supabase/
     client.ts                           # Supabase client factories
     db.ts                               # All database operations
 supabase/migrations/
   001_initial_schema.sql                # Tables: imports, books, highlights
   002_sprint2_enhancements.sql          # note_count, kindle_notebook type
+  003_sprint5_enrichment.sql            # Google Books enrichment columns
 test/
   kindle-parser.test.ts                 # My Clippings parser tests (16)
   kindle-notebook-parser.test.ts        # Notebook parser tests (16)
   api-editing.test.ts                   # Editing API contract tests (22)
+  google-books.test.ts                  # Google Books matching + enrichment tests (24)
   fixtures/kindle-notebook-real.txt     # Real fixture file
 sample/
   kindle-export.txt                     # Sample My Clippings export
@@ -179,6 +192,7 @@ All responses: `{ data: T | null, error: { message, code } | null }`.
 | `DELETE` | `/api/books/[id]` | | Delete book + all highlights |
 | `GET` | `/api/books/[id]/highlights` | `limit`, `offset`, `sort` (sequence\|recent), `has_notes` | Paginated highlights |
 | `POST` | `/api/books/merge` | `{ "keep_id": "...", "merge_id": "..." }` | Merge duplicate books |
+| `POST` | `/api/books/enrich` | `{ "book_id": "..." }` or `{ "backfill": true, "limit": 50 }` | Enrich via Google Books |
 
 ### Highlights
 
@@ -205,6 +219,31 @@ Returns both matching highlights and matching books (by title/author).
 | `GET` | `/api/exports/csv` | `book_id` (optional) | `.csv` file download |
 | `GET` | `/api/exports/json` | `book_id` (optional) | `.json` file download |
 
+## Google Books Enrichment
+
+Books can be enriched with cover art and metadata from the Google Books API. Enrichment is server-side only — the API key is never exposed to the client.
+
+**Architecture**: Cache-first, backend-only. Once a book is enriched (`found` or `not_found`), it won't be re-queried unless forced. The app never depends on Google Books availability at runtime — enrichment is additive, not required.
+
+**Matching**: Uses Jaccard token-overlap scoring to find the best match. High confidence requires ≥65% title similarity + ≥35% author similarity. Low-confidence matches are rejected.
+
+**Enrichment fields on Book**:
+| Field | Type | Description |
+|---|---|---|
+| `google_books_id` | string \| null | Google Books volume ID |
+| `cover_url` | string \| null | Medium-resolution cover image URL |
+| `thumbnail_url` | string \| null | Small cover image URL |
+| `subtitle` | string \| null | Book subtitle |
+| `publisher` | string \| null | Publisher name |
+| `published_date` | string \| null | Publication date (raw, e.g. "1925") |
+| `page_count` | number \| null | Page count |
+| `google_books_link` | string \| null | Link to Google Books page |
+| `enrichment_status` | string | `pending`, `found`, `not_found`, `error`, `skipped` |
+| `enrichment_confidence` | string \| null | `high`, `medium`, `low` |
+| `enrichment_updated_at` | string \| null | When enrichment was last attempted |
+
+**Backfill**: POST `/api/books/enrich` with `{ "backfill": true }` to enrich up to 50 pending books. Throttled at 300ms between API calls.
+
 ## Database schema
 
 Three tables: `imports`, `books`, `highlights`.
@@ -228,3 +267,6 @@ Complete UI overhaul mirroring the Fragmenta iOS design system. Dark journal-ins
 
 ### Sprint 4: Editing + management
 Inline editing of highlights (text + notes) and books (title, author) directly from the book detail page. PATCH/DELETE API endpoints for both highlights and books. Book management: rename, delete (with cascade), merge UI. Export improvements: better markdown formatting, per-book filenames, metadata headers. Responsive/mobile polish: touch targets, compact spacing, always-visible edit controls on touch devices. 54 tests (22 new for editing contracts).
+
+### Sprint 5: Covers, bookshelf, enrichment
+Google Books enrichment layer: server-side API integration with Jaccard confidence scoring, cache-first architecture, backfill support. New bookshelf route with visual cover grid, fallback typographic covers, hover animations. Cover art displayed on book detail pages with "Find cover" button. Enrichment API: single-book and batch backfill endpoints. `next/image` optimization for cover images. New migration adding 11 enrichment columns to books table. Nav updated with Shelf link. 78 tests (24 new for matching/enrichment).

@@ -39,6 +39,18 @@ export interface Book {
   last_imported_at: string;
   created_at: string;
   updated_at: string;
+  // Enrichment (Google Books)
+  google_books_id: string | null;
+  cover_url: string | null;
+  thumbnail_url: string | null;
+  subtitle: string | null;
+  publisher: string | null;
+  published_date: string | null;
+  page_count: number | null;
+  google_books_link: string | null;
+  enrichment_status: 'pending' | 'found' | 'not_found' | 'error' | 'skipped' | null;
+  enrichment_confidence: 'high' | 'medium' | 'low' | null;
+  enrichment_updated_at: string | null;
 }
 
 export interface Highlight {

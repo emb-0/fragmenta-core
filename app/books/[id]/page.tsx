@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getBook, getHighlightsForBook } from "@/lib/supabase/db";
 import { BookEditor } from "@/app/components/book-editor";
+import { BookCover } from "@/app/components/book-cover";
+import { EnrichButton } from "@/app/components/enrich-button";
 import { HighlightList } from "@/app/components/highlight-list";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
@@ -55,26 +57,64 @@ export default async function BookDetailPage({
         Library
       </Link>
 
-      {/* Book hero */}
+      {/* Book hero with cover */}
       <div className="surface-glass" style={{ marginBottom: 'var(--sp-xl)', position: 'relative' }}>
         <div style={{ position: 'relative', zIndex: 1 }}>
-          <p className="text-eyebrow" style={{ marginBottom: 'var(--sp-sm)' }}>Book</p>
-          <h1 className="text-display text-text-1" style={{ marginBottom: 'var(--sp-xs)' }}>
-            {book.canonical_title}
-          </h1>
-          {book.canonical_author && (
-            <p className="text-body-em" style={{ color: 'var(--text-secondary)', marginBottom: 'var(--sp-sm)' }}>
-              {book.canonical_author}
-            </p>
-          )}
+          <div className="flex gap-4" style={{ alignItems: 'flex-start' }}>
+            {/* Cover art */}
+            <div className="shrink-0" style={{ marginTop: '4px' }}>
+              <BookCover
+                title={book.canonical_title}
+                author={book.canonical_author}
+                coverUrl={book.cover_url}
+                thumbnailUrl={book.thumbnail_url}
+                size="sm"
+              />
+            </div>
 
-          {/* Book actions */}
-          <BookEditor
-            bookId={book.id}
-            title={book.canonical_title}
-            author={book.canonical_author}
-            highlightCount={book.highlight_count}
-          />
+            {/* Book info */}
+            <div className="min-w-0 flex-1">
+              <p className="text-eyebrow" style={{ marginBottom: 'var(--sp-xs)' }}>Book</p>
+              <h1 className="text-display text-text-1" style={{ marginBottom: 'var(--sp-xs)' }}>
+                {book.canonical_title}
+              </h1>
+              {book.subtitle && (
+                <p className="text-body" style={{ color: 'var(--text-tertiary)', marginBottom: 'var(--sp-xs)', fontStyle: 'italic' }}>
+                  {book.subtitle}
+                </p>
+              )}
+              {book.canonical_author && (
+                <p className="text-body-em" style={{ color: 'var(--text-secondary)', marginBottom: 'var(--sp-xs)' }}>
+                  {book.canonical_author}
+                </p>
+              )}
+
+              {/* Extra metadata from enrichment */}
+              {(book.publisher || book.published_date || book.page_count) && (
+                <p className="text-meta" style={{ color: 'var(--text-tertiary)', marginBottom: 'var(--sp-xs)' }}>
+                  {[
+                    book.publisher,
+                    book.published_date,
+                    book.page_count ? `${book.page_count} pages` : null,
+                  ].filter(Boolean).join(' · ')}
+                </p>
+              )}
+
+              {/* Actions row */}
+              <div className="flex flex-wrap items-center gap-1" style={{ marginTop: 'var(--sp-xs)' }}>
+                <BookEditor
+                  bookId={book.id}
+                  title={book.canonical_title}
+                  author={book.canonical_author}
+                  highlightCount={book.highlight_count}
+                />
+                <EnrichButton
+                  bookId={book.id}
+                  enrichmentStatus={book.enrichment_status}
+                />
+              </div>
+            </div>
+          </div>
 
           {/* Metrics row */}
           <div className="flex gap-3" style={{ marginTop: 'var(--sp-lg)' }}>

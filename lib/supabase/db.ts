@@ -722,6 +722,156 @@ export async function getRandomHighlight(): Promise<(Highlight & { book: Pick<Bo
 }
 
 // =============================================================================
+// Enrichment
+// =============================================================================
+
+import { searchGoogleBooks } from '@/lib/google-books';
+
+export async function enrichBook(bookId: string): Promise<Book> {
+  const supabase = createServerClient();
+
+  const book = await getBook(bookId);
+  if (!book) throw new Error('Book not found');
+
+  // Skip if already enriched with a definitive result
+  if (book.enrichment_status === 'found' || book.enrichment_status === 'not_found') {
+    return book;
+  }
+
+  const result = await searchGoogleBooks(book.canonical_title, book.canonical_author);
+
+  if (!result) {
+    // No match or API unavailable
+    const { data, error } = await supabase
+      .from('books')
+      .update({
+        enrichment_status: 'not_found',
+        enrichment_updated_at: new Date().toISOString(),
+      })
+      .eq('id', bookId)
+      .select()
+      .single();
+
+    if (error) throw new Error(`Failed to update enrichment: ${error.message}`);
+    return data as Book;
+  }
+
+  // Store enrichment
+  const { data, error } = await supabase
+    .from('books')
+    .update({
+      google_books_id: result.googleBooksId,
+      cover_url: result.coverUrl,
+      thumbnail_url: result.thumbnailUrl,
+      subtitle: result.subtitle,
+      publisher: result.publisher,
+      published_date: result.publishedDate,
+      page_count: result.pageCount,
+      google_books_link: result.infoLink,
+      enrichment_status: 'found',
+      enrichment_confidence: result.confidence,
+      enrichment_updated_at: new Date().toISOString(),
+    })
+    .eq('id', bookId)
+    .select()
+    .single();
+
+  if (error) throw new Error(`Failed to store enrichment: ${error.message}`);
+  return data as Book;
+}
+
+export async function enrichBooksBackfill(options?: {
+  limit?: number;
+  force?: boolean;
+}): Promise<{ enriched: number; notFound: number; errors: number; skipped: number; total: number }> {
+  const supabase = createServerClient();
+  const limit = options?.limit || 50;
+
+  // Get books that need enrichment
+  let query = supabase
+    .from('books')
+    .select('id, canonical_title, canonical_author, enrichment_status')
+    .order('highlight_count', { ascending: false })
+    .limit(limit);
+
+  if (!options?.force) {
+    query = query.or('enrichment_status.eq.pending,enrichment_status.is.null');
+  }
+
+  const { data: books, error } = await query;
+  if (error) throw new Error(`Failed to fetch books for enrichment: ${error.message}`);
+
+  const stats = { enriched: 0, notFound: 0, errors: 0, skipped: 0, total: books?.length || 0 };
+
+  for (const book of books || []) {
+    try {
+      // Throttle: 300ms between API calls
+      if (stats.enriched + stats.notFound > 0) {
+        await new Promise((r) => setTimeout(r, 300));
+      }
+
+      const result = await enrichBook(book.id);
+      if (result.enrichment_status === 'found') {
+        stats.enriched++;
+      } else if (result.enrichment_status === 'not_found') {
+        stats.notFound++;
+      } else {
+        stats.skipped++;
+      }
+    } catch (err) {
+      console.error(`Failed to enrich book ${book.id}:`, err);
+      stats.errors++;
+
+      // Mark as error
+      await supabase
+        .from('books')
+        .update({
+          enrichment_status: 'error',
+          enrichment_updated_at: new Date().toISOString(),
+        })
+        .eq('id', book.id);
+    }
+  }
+
+  return stats;
+}
+
+/** Optimized bookshelf query — only fields needed for cover grid */
+export async function listBooksForShelf(options?: {
+  sort?: BookSortField;
+  hasCovers?: boolean;
+}): Promise<Book[]> {
+  const supabase = createServerClient();
+  let query = supabase
+    .from('books')
+    .select('id, canonical_title, canonical_author, highlight_count, note_count, cover_url, thumbnail_url, enrichment_status, enrichment_confidence, created_at, updated_at, first_imported_at, last_imported_at, content_hash, source_title_raw, source_author_raw, google_books_id, subtitle, publisher, published_date, page_count, google_books_link, enrichment_updated_at');
+
+  if (options?.hasCovers) {
+    query = query.not('cover_url', 'is', null);
+  }
+
+  switch (options?.sort) {
+    case 'title':
+      query = query.order('canonical_title', { ascending: true });
+      break;
+    case 'author':
+      query = query.order('canonical_author', { ascending: true, nullsFirst: false });
+      break;
+    case 'highlights':
+      query = query.order('highlight_count', { ascending: false });
+      break;
+    case 'recent':
+    default:
+      query = query.order('last_imported_at', { ascending: false });
+      break;
+  }
+
+  const { data, error } = await query;
+  if (error) throw new Error(`Failed to list books for shelf: ${error.message}`);
+  return data as Book[];
+}
+
+// =============================================================================
 // Stats
 // =============================================================================
 

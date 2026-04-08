@@ -21,9 +21,9 @@ export const metadata: Metadata = {
 
 const navLinks = [
   { href: "/library", label: "Library" },
+  { href: "/bookshelf", label: "Shelf" },
   { href: "/search", label: "Search" },
   { href: "/import", label: "Import" },
-  { href: "/imports", label: "History" },
 ];
 
 export default function RootLayout({
