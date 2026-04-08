@@ -45,6 +45,7 @@ cp .env.example .env.local
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon/public key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (Dashboard > Settings > API) |
 | `GOOGLE_BOOKS_API_KEY` | Google Books API key (server-side only, for cover enrichment) |
+| `ANTHROPIC_API_KEY` | Anthropic API key (server-side only, for AI book summaries — optional, feature degrades gracefully) |
 
 ### 3. Run database migrations
 
@@ -53,6 +54,7 @@ Apply migration files via the Supabase SQL Editor:
 - `supabase/migrations/001_initial_schema.sql`
 - `supabase/migrations/002_sprint2_enhancements.sql`
 - `supabase/migrations/003_sprint5_enrichment.sql`
+- `supabase/migrations/004_sprint6_collections_ai.sql`
 
 ### 4. Run locally
 
@@ -88,7 +90,7 @@ Fragmenta auto-detects two Kindle export formats:
 ```
 app/
   page.tsx                              # Home with stats + random highlight teaser
-  layout.tsx                            # Root layout: sticky nav, ambient glows, footer
+  layout.tsx                            # Root layout: sticky nav, ambient glows, footer, SW register
   import/page.tsx                       # Import with preview-first flow
   library/page.tsx                      # Book library with chip sort/filter
   bookshelf/page.tsx                    # Cover-based visual bookshelf grid
@@ -97,6 +99,12 @@ app/
   random/page.tsx                       # Random highlight discovery
   imports/page.tsx                      # Import history
   imports/[id]/page.tsx                 # Import detail with stat cards
+  insights/page.tsx                     # Reading stats: counts, top books, recent highlights
+  collections/page.tsx                  # Collection listing
+  collections/[id]/page.tsx             # Collection detail with books
+  offline/page.tsx                      # PWA offline fallback page
+  share/highlight/[id]/page.tsx         # Share card preview page
+  share/highlight/[id]/share-actions.tsx # Client: share/download actions
   components/
     import-form.tsx                     # Client: preview → confirm import
     search-bar.tsx                      # Client: search field with icon
@@ -107,14 +115,19 @@ app/
     book-cover.tsx                      # Client: cover image with fallback
     enrich-button.tsx                   # Client: trigger Google Books lookup
     backfill-button.tsx                 # Client: batch enrich from bookshelf
+    collection-manager.tsx              # Client: create/delete collections
+    collection-detail.tsx               # Client: add/remove books from collection
+    sw-register.tsx                     # Client: service worker registration
   api/
     imports/kindle/route.ts             # POST - import highlights
     imports/kindle/preview/route.ts     # POST - preview import (dry run)
     imports/route.ts                    # GET  - list imports
-    imports/[id]/route.ts               # GET  - import detail
+    imports/[id]/route.ts              # GET  - import detail
     books/route.ts                      # GET  - list books
     books/[id]/route.ts                 # GET, PATCH, DELETE - single book
+    books/[id]/route.ts                 # GET, PATCH, DELETE - single book
     books/[id]/highlights/route.ts      # GET  - highlights for book
+    books/[id]/summary/route.ts         # GET, POST - AI book summary (cached)
     books/merge/route.ts                # POST - merge duplicate books
     books/enrich/route.ts               # POST - enrich book(s) via Google Books
     highlights/[id]/route.ts            # GET, PATCH, DELETE - single highlight
@@ -123,6 +136,14 @@ app/
     exports/markdown/route.ts           # GET  - markdown export
     exports/csv/route.ts                # GET  - CSV export
     exports/json/route.ts               # GET  - JSON export
+    collections/route.ts                # GET, POST - list/create collections
+    collections/[id]/route.ts           # GET, PATCH, DELETE - single collection
+    collections/[id]/books/route.ts     # POST - add book to collection
+    collections/[id]/books/[bookId]/route.ts  # DELETE - remove book
+    stats/overview/route.ts             # GET  - stats overview
+    stats/activity/route.ts             # GET  - activity timeline
+    stats/books/route.ts                # GET  - top books by highlights
+    share/highlight/[id]/route.tsx       # GET  - OG image share card
 lib/
   types.ts                              # All TypeScript types
   parser/
@@ -134,18 +155,26 @@ lib/
     index.ts                            # Google Books module exports
     client.ts                           # API client + result extraction
     match.ts                            # Jaccard scoring + confidence
+  ai/
+    summarize.ts                        # Anthropic Claude API for book summaries
   supabase/
     client.ts                           # Supabase client factories
     db.ts                               # All database operations
+public/
+  manifest.json                         # PWA web app manifest
+  sw.js                                 # Service worker (cache-first static, network-first pages)
+  icon-192.svg                          # PWA app icon
 supabase/migrations/
   001_initial_schema.sql                # Tables: imports, books, highlights
   002_sprint2_enhancements.sql          # note_count, kindle_notebook type
   003_sprint5_enrichment.sql            # Google Books enrichment columns
+  004_sprint6_collections_ai.sql        # Tables: collections, collection_books, book_summaries
 test/
   kindle-parser.test.ts                 # My Clippings parser tests (16)
   kindle-notebook-parser.test.ts        # Notebook parser tests (16)
   api-editing.test.ts                   # Editing API contract tests (22)
   google-books.test.ts                  # Google Books matching + enrichment tests (24)
+  sprint6.test.ts                       # Sprint 6: collections, stats, share, AI, PWA (20)
   fixtures/kindle-notebook-real.txt     # Real fixture file
 sample/
   kindle-export.txt                     # Sample My Clippings export
@@ -244,9 +273,68 @@ Books can be enriched with cover art and metadata from the Google Books API. Enr
 
 **Backfill**: POST `/api/books/enrich` with `{ "backfill": true }` to enrich up to 50 pending books. Throttled at 300ms between API calls.
 
+## Collections
+
+User-defined book groupings. No auth — single-user app.
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/collections` | List all collections |
+| `POST` | `/api/collections` | Create collection (`{ "name": "...", "description": "..." }`) |
+| `GET` | `/api/collections/[id]` | Collection detail with books |
+| `PATCH` | `/api/collections/[id]` | Update name/description |
+| `DELETE` | `/api/collections/[id]` | Delete collection (books are not deleted) |
+| `POST` | `/api/collections/[id]/books` | Add book (`{ "book_id": "..." }`) |
+| `DELETE` | `/api/collections/[id]/books/[bookId]` | Remove book from collection |
+
+## Stats & Insights
+
+| Method | Endpoint | Params | Description |
+|---|---|---|---|
+| `GET` | `/api/stats/overview` | | Book, highlight, note counts + avg per book |
+| `GET` | `/api/stats/activity` | `months` (default 6) | Highlights per month timeline |
+| `GET` | `/api/stats/books` | `limit` (default 10) | Top books by highlight count |
+
+The `/insights` page renders stats via direct Supabase queries in a server component (no API round-trip).
+
+## AI Book Summaries
+
+Generates summaries of your highlights per book using the Anthropic Claude API.
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/books/[id]/summary` | Get cached summary (returns 404 if none) |
+| `POST` | `/api/books/[id]/summary` | Generate or regenerate summary |
+
+**Cache logic**: Summaries are cached by `highlight_count_at_generation`. If the highlight count hasn't changed, the cached summary is returned. POST forces regeneration.
+
+**Model**: `claude-sonnet-4-20250514`, 500 max tokens, temperature 0.3.
+
+**Graceful degradation**: If `ANTHROPIC_API_KEY` is not set, summary generation returns a clear error. The rest of the app is unaffected.
+
+## Share Cards
+
+OG-style image cards for sharing highlights. Dark literary design matching the Fragmenta aesthetic.
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/share/highlight/[id]` | Returns 1200x630 PNG image (ImageResponse via next/og) |
+| `GET` | `/api/share/highlight/[id]?download=1` | Returns image as attachment for download |
+
+The `/share/highlight/[id]` page provides a preview with share/download actions.
+
+## PWA / Offline Support
+
+Fragmenta is installable as a Progressive Web App.
+
+- **Manifest**: `public/manifest.json` — standalone display, dark theme (#07090C)
+- **Service worker**: `public/sw.js` — cache-first for static assets (`_next/`), network-first for pages (falls back to cache, then `/offline`), network-first for API GETs
+- **Offline page**: `/offline` — friendly message with retry button
+- **Icon**: `public/icon-192.svg`
+
 ## Database schema
 
-Three tables: `imports`, `books`, `highlights`.
+Six tables: `imports`, `books`, `highlights`, `collections`, `collection_books`, `book_summaries`.
 
 - **Dedupe**: Books by `content_hash(title, author)`. Highlights by `(book_id, content_hash(text))`. Re-importing is safe.
 - **Full-text search**: GIN indexes on title, author, highlight text, and notes.
@@ -270,3 +358,6 @@ Inline editing of highlights (text + notes) and books (title, author) directly f
 
 ### Sprint 5: Covers, bookshelf, enrichment
 Google Books enrichment layer: server-side API integration with Jaccard confidence scoring, cache-first architecture, backfill support. New bookshelf route with visual cover grid, fallback typographic covers, hover animations. Cover art displayed on book detail pages with "Find cover" button. Enrichment API: single-book and batch backfill endpoints. `next/image` optimization for cover images. New migration adding 11 enrichment columns to books table. Nav updated with Shelf link. 78 tests (24 new for matching/enrichment).
+
+### Sprint 6: Insights, collections, share cards, AI summaries, PWA
+Reading stats/insights page with server-side parallel queries (book/highlight/note counts, top-10 most annotated, recent highlights). Collections system for user-defined book groupings (full CRUD + add/remove books). Share card generation for highlights via `next/og` ImageResponse (1200x630 dark literary design). AI-powered book summaries via Anthropic Claude API with cache invalidation by highlight count. PWA support: web app manifest, service worker (cache-first static, network-first pages with offline fallback), installable on mobile. Stats API endpoints. New migration adding 3 tables (collections, collection_books, book_summaries). Nav updated with Insights link. 98 tests (20 new for Sprint 6 features).

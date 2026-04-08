@@ -69,6 +69,29 @@ export interface Highlight {
   updated_at: string;
 }
 
+export interface Collection {
+  id: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CollectionBook {
+  collection_id: string;
+  book_id: string;
+  added_at: string;
+}
+
+export interface BookSummary {
+  book_id: string;
+  summary: string;
+  highlight_count_at_generation: number;
+  model: string;
+  created_at: string;
+  updated_at: string;
+}
+
 // =============================================================================
 // Parser types
 // =============================================================================

@@ -1,0 +1,17 @@
+{
+  "name": "Fragmenta",
+  "short_name": "Fragmenta",
+  "description": "Your reading highlights, collected and searchable.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#07090C",
+  "theme_color": "#07090C",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icon-192.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

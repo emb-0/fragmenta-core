@@ -1,5 +1,5 @@
 import { createServerClient } from './client';
-import type { Book, Highlight, Import, ImportSummary, SearchResult } from '@/lib/types';
+import type { Book, Highlight, Import, ImportSummary, SearchResult, Collection, CollectionBook, BookSummary } from '@/lib/types';
 import type { ParseResult } from '@/lib/types';
 import type { KindleFormat } from '@/lib/parser';
 import { contentHash, bookContentHash } from '@/lib/parser';
@@ -900,6 +900,404 @@ export async function getLibraryStats(): Promise<{
     highlightCount: highlightCount || 0,
     noteCount: noteCount || 0,
   };
+}
+
+// =============================================================================
+// Collections
+// =============================================================================
+
+export async function listCollections(): Promise<(Collection & { book_count: number })[]> {
+  const supabase = createServerClient();
+
+  const { data: collections, error } = await supabase
+    .from('collections')
+    .select('*')
+    .order('name', { ascending: true });
+
+  if (error) throw new Error(`Failed to list collections: ${error.message}`);
+
+  // Get book counts for each collection
+  const result: (Collection & { book_count: number })[] = [];
+  for (const collection of collections || []) {
+    const { count } = await supabase
+      .from('collection_books')
+      .select('*', { count: 'exact', head: true })
+      .eq('collection_id', collection.id);
+
+    result.push({ ...collection, book_count: count || 0 });
+  }
+
+  return result as (Collection & { book_count: number })[];
+}
+
+export async function getCollection(id: string): Promise<(Collection & { books: Book[] }) | null> {
+  const supabase = createServerClient();
+
+  const { data: collection, error } = await supabase
+    .from('collections')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') return null;
+    throw new Error(`Failed to get collection: ${error.message}`);
+  }
+
+  // Get books via collection_books join
+  const { data: collectionBooks, error: cbError } = await supabase
+    .from('collection_books')
+    .select('book_id')
+    .eq('collection_id', id);
+
+  if (cbError) throw new Error(`Failed to get collection books: ${cbError.message}`);
+
+  const bookIds = (collectionBooks || []).map((cb: Record<string, unknown>) => cb.book_id as string);
+  let books: Book[] = [];
+
+  if (bookIds.length > 0) {
+    const { data: booksData, error: booksError } = await supabase
+      .from('books')
+      .select('*')
+      .in('id', bookIds)
+      .order('canonical_title', { ascending: true });
+
+    if (booksError) throw new Error(`Failed to get books: ${booksError.message}`);
+    books = booksData as Book[];
+  }
+
+  return { ...collection, books } as Collection & { books: Book[] };
+}
+
+export async function createCollection(name: string, description?: string): Promise<Collection> {
+  const supabase = createServerClient();
+
+  const { data, error } = await supabase
+    .from('collections')
+    .insert({
+      name: name.trim(),
+      description: description?.trim() || null,
+    })
+    .select()
+    .single();
+
+  if (error) throw new Error(`Failed to create collection: ${error.message}`);
+  return data as Collection;
+}
+
+export async function updateCollection(
+  id: string,
+  updates: { name?: string; description?: string | null },
+): Promise<Collection> {
+  const supabase = createServerClient();
+
+  const patch: Record<string, unknown> = {};
+  if (updates.name !== undefined) patch.name = updates.name.trim();
+  if (updates.description !== undefined) patch.description = updates.description?.trim() || null;
+
+  if (Object.keys(patch).length === 0) {
+    const { data, error } = await supabase
+      .from('collections')
+      .select('*')
+      .eq('id', id)
+      .single();
+    if (error) throw new Error('Collection not found');
+    return data as Collection;
+  }
+
+  const { data, error } = await supabase
+    .from('collections')
+    .update(patch)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') throw new Error('Collection not found');
+    throw new Error(`Failed to update collection: ${error.message}`);
+  }
+  return data as Collection;
+}
+
+export async function deleteCollection(id: string): Promise<void> {
+  const supabase = createServerClient();
+
+  // Delete collection_books entries first
+  const { error: cbError } = await supabase
+    .from('collection_books')
+    .delete()
+    .eq('collection_id', id);
+
+  if (cbError) throw new Error(`Failed to delete collection books: ${cbError.message}`);
+
+  // Delete the collection
+  const { error } = await supabase
+    .from('collections')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw new Error(`Failed to delete collection: ${error.message}`);
+}
+
+export async function addBookToCollection(collectionId: string, bookId: string): Promise<CollectionBook> {
+  const supabase = createServerClient();
+
+  const { data, error } = await supabase
+    .from('collection_books')
+    .insert({
+      collection_id: collectionId,
+      book_id: bookId,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    if (error.code === '23505') throw new Error('Book is already in this collection');
+    throw new Error(`Failed to add book to collection: ${error.message}`);
+  }
+  return data as CollectionBook;
+}
+
+export async function removeBookFromCollection(collectionId: string, bookId: string): Promise<void> {
+  const supabase = createServerClient();
+
+  const { error } = await supabase
+    .from('collection_books')
+    .delete()
+    .eq('collection_id', collectionId)
+    .eq('book_id', bookId);
+
+  if (error) throw new Error(`Failed to remove book from collection: ${error.message}`);
+}
+
+// =============================================================================
+// Insights / Stats
+// =============================================================================
+
+export interface StatsOverview {
+  bookCount: number;
+  highlightCount: number;
+  noteCount: number;
+  avgHighlightsPerBook: number;
+  oldestImport: string | null;
+  newestImport: string | null;
+  booksWithCovers: number;
+}
+
+export async function getStatsOverview(): Promise<StatsOverview> {
+  const supabase = createServerClient();
+
+  const [
+    { count: bookCount },
+    { count: highlightCount },
+    { count: noteCount },
+    { count: booksWithCovers },
+    { data: oldestImportRow },
+    { data: newestImportRow },
+  ] = await Promise.all([
+    supabase.from('books').select('*', { count: 'exact', head: true }),
+    supabase.from('highlights').select('*', { count: 'exact', head: true }),
+    supabase
+      .from('highlights')
+      .select('*', { count: 'exact', head: true })
+      .not('note_text', 'is', null),
+    supabase
+      .from('books')
+      .select('*', { count: 'exact', head: true })
+      .not('cover_url', 'is', null),
+    supabase
+      .from('imports')
+      .select('created_at')
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .single(),
+    supabase
+      .from('imports')
+      .select('created_at')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single(),
+  ]);
+
+  const books = bookCount || 0;
+  const highlights = highlightCount || 0;
+
+  return {
+    bookCount: books,
+    highlightCount: highlights,
+    noteCount: noteCount || 0,
+    avgHighlightsPerBook: books > 0 ? Math.round((highlights / books) * 10) / 10 : 0,
+    oldestImport: oldestImportRow?.created_at ?? null,
+    newestImport: newestImportRow?.created_at ?? null,
+    booksWithCovers: booksWithCovers || 0,
+  };
+}
+
+export interface ActivityMonth {
+  month: string; // YYYY-MM
+  highlights: number;
+  notes: number;
+  books: number;
+}
+
+export async function getActivityTimeline(months: number = 12): Promise<ActivityMonth[]> {
+  const supabase = createServerClient();
+
+  // Build list of months going back N months from today
+  const now = new Date();
+  const monthBuckets: string[] = [];
+  for (let i = months - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    monthBuckets.push(`${yyyy}-${mm}`);
+  }
+
+  const cutoffDate = `${monthBuckets[0]}-01`;
+
+  // Fetch all highlights created after the cutoff
+  const { data: highlights, error: hlError } = await supabase
+    .from('highlights')
+    .select('created_at, note_text')
+    .gte('created_at', cutoffDate)
+    .order('created_at', { ascending: true });
+
+  if (hlError) throw new Error(`Failed to fetch activity highlights: ${hlError.message}`);
+
+  // Fetch all books first-imported after the cutoff
+  const { data: books, error: bkError } = await supabase
+    .from('books')
+    .select('first_imported_at')
+    .gte('first_imported_at', cutoffDate)
+    .order('first_imported_at', { ascending: true });
+
+  if (bkError) throw new Error(`Failed to fetch activity books: ${bkError.message}`);
+
+  // Aggregate into monthly buckets
+  const bucketMap = new Map<string, ActivityMonth>();
+  for (const m of monthBuckets) {
+    bucketMap.set(m, { month: m, highlights: 0, notes: 0, books: 0 });
+  }
+
+  for (const hl of highlights || []) {
+    const month = (hl.created_at as string).substring(0, 7);
+    const bucket = bucketMap.get(month);
+    if (bucket) {
+      bucket.highlights++;
+      if (hl.note_text) bucket.notes++;
+    }
+  }
+
+  for (const bk of books || []) {
+    const month = (bk.first_imported_at as string).substring(0, 7);
+    const bucket = bucketMap.get(month);
+    if (bucket) bucket.books++;
+  }
+
+  return monthBuckets.map((m) => bucketMap.get(m)!);
+}
+
+export async function getTopBooks(limit: number = 10): Promise<Book[]> {
+  const supabase = createServerClient();
+  const { data, error } = await supabase
+    .from('books')
+    .select('*')
+    .order('highlight_count', { ascending: false })
+    .limit(limit);
+
+  if (error) throw new Error(`Failed to fetch top books: ${error.message}`);
+  return data as Book[];
+}
+
+export async function getRecentHighlights(
+  limit: number = 10,
+): Promise<Array<Highlight & { book: Pick<Book, 'id' | 'canonical_title' | 'canonical_author'> }>> {
+  const supabase = createServerClient();
+  const { data, error } = await supabase
+    .from('highlights')
+    .select('*, books!inner(id, canonical_title, canonical_author)')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw new Error(`Failed to fetch recent highlights: ${error.message}`);
+
+  return (data || []).map((row: Record<string, unknown>) => {
+    const books = row.books as Record<string, unknown>;
+    return {
+      ...extractHighlight(row),
+      book: {
+        id: books.id as string,
+        canonical_title: books.canonical_title as string,
+        canonical_author: books.canonical_author as string | null,
+      },
+    };
+  });
+}
+
+// =============================================================================
+// AI Summaries
+// =============================================================================
+
+export async function getBookSummary(bookId: string): Promise<BookSummary | null> {
+  const supabase = createServerClient();
+  const { data, error } = await supabase
+    .from('book_summaries')
+    .select('*')
+    .eq('book_id', bookId)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') return null;
+    throw new Error(`Failed to get book summary: ${error.message}`);
+  }
+  return data as BookSummary;
+}
+
+export async function generateAndCacheBookSummary(bookId: string): Promise<BookSummary | null> {
+  const book = await getBook(bookId);
+  if (!book) throw new Error('Book not found');
+
+  const { highlights } = await getHighlightsForBook(bookId, { limit: 200 });
+  const currentCount = highlights.length;
+
+  // Check for a valid cached summary
+  const cached = await getBookSummary(bookId);
+  if (cached && cached.highlight_count_at_generation === currentCount) {
+    return cached;
+  }
+
+  // Generate a new summary via AI
+  const { generateBookSummary, SUMMARY_MODEL } = await import('@/lib/ai/summarize');
+  const summaryText = await generateBookSummary(
+    book.canonical_title,
+    book.canonical_author,
+    highlights.map((h) => ({ text: h.text, note_text: h.note_text })),
+  );
+
+  if (summaryText === null) {
+    // AI unavailable (no API key)
+    return null;
+  }
+
+  // Upsert into book_summaries
+  const supabase = createServerClient();
+  const { data, error } = await supabase
+    .from('book_summaries')
+    .upsert(
+      {
+        book_id: bookId,
+        summary: summaryText,
+        highlight_count_at_generation: currentCount,
+        model: SUMMARY_MODEL,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'book_id' },
+    )
+    .select()
+    .single();
+
+  if (error) throw new Error(`Failed to cache book summary: ${error.message}`);
+  return data as BookSummary;
 }
 
 // =============================================================================

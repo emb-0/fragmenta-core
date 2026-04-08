@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
+import { ServiceWorkerRegister } from "./components/sw-register";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -17,13 +18,19 @@ export const metadata: Metadata = {
   title: "Fragmenta",
   description: "Your reading highlights, collected and searchable.",
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"),
+  manifest: "/manifest.json",
+  other: {
+    "apple-mobile-web-app-capable": "yes",
+    "apple-mobile-web-app-status-bar-style": "black-translucent",
+    "mobile-web-app-capable": "yes",
+  },
 };
 
 const navLinks = [
   { href: "/library", label: "Library" },
   { href: "/bookshelf", label: "Shelf" },
+  { href: "/insights", label: "Insights" },
   { href: "/search", label: "Search" },
-  { href: "/import", label: "Import" },
 ];
 
 export default function RootLayout({
@@ -37,6 +44,8 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} antialiased`}
     >
       <body className="min-h-dvh flex flex-col relative">
+        {/* PWA service worker */}
+        <ServiceWorkerRegister />
         {/* Ambient background glows */}
         <div className="screen-glow" aria-hidden="true" />
 

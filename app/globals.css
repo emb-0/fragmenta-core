@@ -518,6 +518,25 @@ body {
 .btn-primary:disabled { opacity: 0.35; cursor: not-allowed; }
 
 /* ============================================================================
+   Stats grid
+   ============================================================================ */
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: var(--sp-md);
+}
+
+.stats-grid .surface-journal {
+  padding: var(--sp-lg) var(--sp-md);
+}
+
+.stats-grid .text-display {
+  font-size: 2rem;
+  margin-bottom: 4px;
+}
+
+/* ============================================================================
    Bookshelf grid
    ============================================================================ */
 
