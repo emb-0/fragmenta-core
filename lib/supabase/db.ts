@@ -302,6 +302,171 @@ export async function mergeBooks(keepId: string, mergeId: string): Promise<void>
 }
 
 // =============================================================================
+// Book editing
+// =============================================================================
+
+export async function updateBook(
+  id: string,
+  updates: { canonical_title?: string; canonical_author?: string | null },
+): Promise<Book> {
+  const supabase = createServerClient();
+
+  const patch: Record<string, unknown> = {};
+  if (updates.canonical_title !== undefined) patch.canonical_title = updates.canonical_title.trim();
+  if (updates.canonical_author !== undefined) patch.canonical_author = updates.canonical_author?.trim() || null;
+
+  if (Object.keys(patch).length === 0) {
+    const book = await getBook(id);
+    if (!book) throw new Error('Book not found');
+    return book;
+  }
+
+  // Recompute content hash if title or author changed
+  const existing = await getBook(id);
+  if (!existing) throw new Error('Book not found');
+
+  const newTitle = (patch.canonical_title as string) ?? existing.canonical_title;
+  const newAuthor = (patch.canonical_author as string | null) ?? existing.canonical_author;
+  patch.content_hash = bookContentHash(newTitle, newAuthor);
+
+  const { data, error } = await supabase
+    .from('books')
+    .update(patch)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw new Error(`Failed to update book: ${error.message}`);
+  return data as Book;
+}
+
+export async function deleteBook(id: string): Promise<{ deletedHighlights: number }> {
+  const supabase = createServerClient();
+
+  // Count highlights first
+  const { count } = await supabase
+    .from('highlights')
+    .select('*', { count: 'exact', head: true })
+    .eq('book_id', id);
+
+  // Delete highlights
+  const { error: hlError } = await supabase
+    .from('highlights')
+    .delete()
+    .eq('book_id', id);
+  if (hlError) throw new Error(`Failed to delete highlights: ${hlError.message}`);
+
+  // Delete book
+  const { error: bookError } = await supabase
+    .from('books')
+    .delete()
+    .eq('id', id);
+  if (bookError) throw new Error(`Failed to delete book: ${bookError.message}`);
+
+  return { deletedHighlights: count || 0 };
+}
+
+// =============================================================================
+// Highlight editing
+// =============================================================================
+
+export async function updateHighlight(
+  id: string,
+  updates: { text?: string; note_text?: string | null },
+): Promise<Highlight> {
+  const supabase = createServerClient();
+
+  const patch: Record<string, unknown> = {};
+  if (updates.text !== undefined) {
+    const trimmed = updates.text.trim();
+    if (!trimmed) throw new Error('Highlight text cannot be empty');
+    patch.text = trimmed;
+    patch.content_hash = contentHash(trimmed);
+  }
+  if (updates.note_text !== undefined) {
+    patch.note_text = updates.note_text?.trim() || null;
+  }
+
+  if (Object.keys(patch).length === 0) {
+    const hl = await getHighlight(id);
+    if (!hl) throw new Error('Highlight not found');
+    return hl;
+  }
+
+  const { data, error } = await supabase
+    .from('highlights')
+    .update(patch)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    if (error.code === '23505') throw new Error('A highlight with this text already exists for this book');
+    throw new Error(`Failed to update highlight: ${error.message}`);
+  }
+
+  // If note was added or removed, update book note_count
+  if (updates.note_text !== undefined) {
+    const bookId = (data as Record<string, unknown>).book_id as string;
+    const { count: noteCount } = await supabase
+      .from('highlights')
+      .select('*', { count: 'exact', head: true })
+      .eq('book_id', bookId)
+      .not('note_text', 'is', null);
+
+    await supabase
+      .from('books')
+      .update({ note_count: noteCount || 0 })
+      .eq('id', bookId);
+  }
+
+  return data as Highlight;
+}
+
+export async function deleteHighlight(id: string): Promise<{ bookId: string }> {
+  const supabase = createServerClient();
+
+  // Get the highlight first to know its book
+  const { data: existing } = await supabase
+    .from('highlights')
+    .select('book_id, note_text')
+    .eq('id', id)
+    .single();
+
+  if (!existing) throw new Error('Highlight not found');
+  const bookId = existing.book_id as string;
+
+  const { error } = await supabase
+    .from('highlights')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw new Error(`Failed to delete highlight: ${error.message}`);
+
+  // Update book counts
+  const { count: hlCount } = await supabase
+    .from('highlights')
+    .select('*', { count: 'exact', head: true })
+    .eq('book_id', bookId);
+
+  const { count: noteCount } = await supabase
+    .from('highlights')
+    .select('*', { count: 'exact', head: true })
+    .eq('book_id', bookId)
+    .not('note_text', 'is', null);
+
+  await supabase
+    .from('books')
+    .update({
+      highlight_count: hlCount || 0,
+      note_count: noteCount || 0,
+    })
+    .eq('id', bookId);
+
+  return { bookId };
+}
+
+// =============================================================================
 // Highlights
 // =============================================================================
 

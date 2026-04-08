@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getBook, getHighlightsForBook } from "@/lib/supabase/db";
-import { CopyButton } from "@/app/components/copy-button";
+import { BookEditor } from "@/app/components/book-editor";
+import { HighlightList } from "@/app/components/highlight-list";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -31,6 +32,15 @@ export default async function BookDetailPage({
     hasNotes: hasNotes || undefined,
   });
 
+  // Serialize highlights for the client component
+  const clientHighlights = highlights.map((h) => ({
+    id: h.id,
+    sequence_number: h.sequence_number,
+    text: h.text,
+    note_text: h.note_text,
+    source_location: h.source_location,
+  }));
+
   return (
     <div className="page-container">
       {/* Back nav */}
@@ -53,13 +63,21 @@ export default async function BookDetailPage({
             {book.canonical_title}
           </h1>
           {book.canonical_author && (
-            <p className="text-body-em" style={{ color: 'var(--text-secondary)', marginBottom: 'var(--sp-lg)' }}>
+            <p className="text-body-em" style={{ color: 'var(--text-secondary)', marginBottom: 'var(--sp-sm)' }}>
               {book.canonical_author}
             </p>
           )}
 
+          {/* Book actions */}
+          <BookEditor
+            bookId={book.id}
+            title={book.canonical_title}
+            author={book.canonical_author}
+            highlightCount={book.highlight_count}
+          />
+
           {/* Metrics row */}
-          <div className="flex gap-3">
+          <div className="flex gap-3" style={{ marginTop: 'var(--sp-lg)' }}>
             <div className="surface-inset flex-1 text-center">
               <p className="text-eyebrow" style={{ marginBottom: '2px' }}>Highlights</p>
               <p className="text-card-title text-text-1">{total}</p>
@@ -108,55 +126,13 @@ export default async function BookDetailPage({
         </a>
       </div>
 
-      {/* Highlights */}
-      {highlights.length === 0 ? (
-        <div className="surface-section" style={{ textAlign: 'center', padding: 'var(--sp-2xl) var(--sp-lg)' }}>
-          <p className="text-body" style={{ color: 'var(--text-tertiary)' }}>
-            No highlights match your filters.
-          </p>
-        </div>
-      ) : (
-        <div className="flex flex-col" style={{ gap: 'var(--sp-md)' }}>
-          {highlights.map((h, idx) => (
-            <div
-              key={h.id}
-              id={`h-${h.id}`}
-              className="surface-journal group"
-              style={{ scrollMarginTop: '80px' }}
-            >
-              {/* Sequence number */}
-              <div className="flex items-start justify-between" style={{ marginBottom: 'var(--sp-sm)' }}>
-                <span className="text-eyebrow" style={{ color: 'var(--text-tertiary)' }}>
-                  {sort === "sequence" ? `#${h.sequence_number || idx + 1}` : ''}
-                </span>
-                <span className="opacity-0 group-hover:opacity-100 transition-opacity">
-                  <CopyButton text={h.text} />
-                </span>
-              </div>
-
-              {/* Highlight text */}
-              <p className="text-narrative" style={{ whiteSpace: 'pre-wrap' }}>
-                {h.text}
-              </p>
-
-              {/* Note */}
-              {h.note_text && (
-                <div className="surface-inset" style={{ marginTop: 'var(--sp-md)' }}>
-                  <p className="text-eyebrow" style={{ marginBottom: '4px', color: 'var(--accent-soft)' }}>Note</p>
-                  <p className="text-body" style={{ color: 'var(--text-secondary)' }}>{h.note_text}</p>
-                </div>
-              )}
-
-              {/* Metadata */}
-              {h.source_location && (
-                <p className="text-meta" style={{ marginTop: 'var(--sp-sm)', color: 'var(--text-tertiary)', fontSize: 'var(--font-chip)' }}>
-                  {h.source_location}
-                </p>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Highlights — client component with inline editing */}
+      <HighlightList
+        initialHighlights={clientHighlights}
+        bookTitle={book.canonical_title}
+        bookAuthor={book.canonical_author}
+        sort={sort}
+      />
     </div>
   );
 }

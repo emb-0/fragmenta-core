@@ -29,10 +29,21 @@ export async function GET(request: NextRequest) {
 
     const csv = rows.join('\n');
 
+    // Per-book filename
+    let filename = 'fragmenta-highlights.csv';
+    if (bookId && books.length === 1) {
+      const slug = books[0].canonical_title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '')
+        .slice(0, 60);
+      filename = `${slug}-highlights.csv`;
+    }
+
     return new Response(csv, {
       headers: {
         'Content-Type': 'text/csv; charset=utf-8',
-        'Content-Disposition': 'attachment; filename="fragmenta-highlights.csv"',
+        'Content-Disposition': `attachment; filename="${filename}"`,
       },
     });
   } catch (err) {

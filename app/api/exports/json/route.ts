@@ -10,6 +10,8 @@ export async function GET(request: NextRequest) {
 
     const exported = {
       exported_at: new Date().toISOString(),
+      total_highlights: books.reduce((n, b) => n + b.highlights.length, 0),
+      total_books: books.length,
       books: books.map((b) => ({
         title: b.canonical_title,
         author: b.canonical_author,
@@ -25,10 +27,21 @@ export async function GET(request: NextRequest) {
       })),
     };
 
+    // Per-book filename
+    let filename = 'fragmenta-highlights.json';
+    if (bookId && books.length === 1) {
+      const slug = books[0].canonical_title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '')
+        .slice(0, 60);
+      filename = `${slug}-highlights.json`;
+    }
+
     return new Response(JSON.stringify(exported, null, 2), {
       headers: {
         'Content-Type': 'application/json; charset=utf-8',
-        'Content-Disposition': 'attachment; filename="fragmenta-highlights.json"',
+        'Content-Disposition': `attachment; filename="${filename}"`,
       },
     });
   } catch (err) {

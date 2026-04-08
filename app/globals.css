@@ -516,3 +516,106 @@ body {
 .btn-primary:hover { background: var(--surface-quaternary); }
 .btn-primary:active { transform: scale(0.98); opacity: 0.92; }
 .btn-primary:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ============================================================================
+   Responsive / mobile
+   ============================================================================ */
+
+/* Compact nav on small screens */
+@media (max-width: 640px) {
+  .page-container {
+    padding: var(--sp-lg) var(--sp-md);
+  }
+
+  .text-display {
+    font-size: 1.75rem;
+  }
+
+  .text-large-title {
+    font-size: 1.625rem;
+  }
+
+  .text-narrative {
+    font-size: var(--font-body);
+    line-height: 1.65;
+  }
+
+  .surface-journal {
+    padding: var(--sp-md);
+    border-radius: var(--radius-lg);
+  }
+
+  .surface-glass {
+    padding: var(--sp-md);
+    border-radius: var(--radius-lg);
+  }
+
+  .surface-section {
+    padding: var(--sp-md);
+    border-radius: var(--radius-md);
+  }
+
+  .surface-inset {
+    padding: var(--sp-sm);
+    border-radius: var(--radius-sm);
+  }
+
+  /* Stack metrics on mobile */
+  .flex.gap-3 .surface-inset {
+    min-width: 0;
+  }
+
+  /* Show edit toolbar on mobile (no hover) */
+  .group .opacity-0 {
+    opacity: 1;
+  }
+
+  /* Smaller hero shadow on mobile */
+  .surface-glass {
+    box-shadow: var(--shadow-card);
+  }
+
+  /* Reduce glow blur on mobile for performance */
+  .screen-glow::before {
+    width: 180px;
+    height: 180px;
+    filter: blur(60px);
+  }
+  .screen-glow::after {
+    width: 200px;
+    height: 200px;
+    filter: blur(80px);
+  }
+}
+
+/* Touch target sizing */
+@media (pointer: coarse) {
+  .btn-ghost {
+    min-height: 44px;
+    min-width: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .chip {
+    min-height: 36px;
+    padding: var(--sp-sm) calc(var(--sp-sm) + 4px);
+  }
+
+  /* Always show edit controls on touch */
+  .group .opacity-0 {
+    opacity: 1;
+  }
+}
+
+/* Medium screens — slight adjustments */
+@media (max-width: 768px) and (min-width: 641px) {
+  .page-container {
+    padding: var(--sp-xl) var(--sp-lg);
+  }
+
+  .text-display {
+    font-size: 2rem;
+  }
+}

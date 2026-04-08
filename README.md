@@ -98,16 +98,19 @@ app/
     import-form.tsx                     # Client: preview → confirm import
     search-bar.tsx                      # Client: search field with icon
     copy-button.tsx                     # Client: copy with citation support
+    highlight-editor.tsx                # Client: inline edit/delete highlights
+    highlight-list.tsx                  # Client: highlight list with editing
+    book-editor.tsx                     # Client: edit/delete/merge books
   api/
     imports/kindle/route.ts             # POST - import highlights
     imports/kindle/preview/route.ts     # POST - preview import (dry run)
     imports/route.ts                    # GET  - list imports
     imports/[id]/route.ts               # GET  - import detail
     books/route.ts                      # GET  - list books
-    books/[id]/route.ts                 # GET  - single book
+    books/[id]/route.ts                 # GET, PATCH, DELETE - single book
     books/[id]/highlights/route.ts      # GET  - highlights for book
     books/merge/route.ts                # POST - merge duplicate books
-    highlights/[id]/route.ts            # GET  - single highlight
+    highlights/[id]/route.ts            # GET, PATCH, DELETE - single highlight
     search/route.ts                     # GET  - search highlights + books
     random/route.ts                     # GET  - random highlight
     exports/markdown/route.ts           # GET  - markdown export
@@ -129,6 +132,7 @@ supabase/migrations/
 test/
   kindle-parser.test.ts                 # My Clippings parser tests (16)
   kindle-notebook-parser.test.ts        # Notebook parser tests (16)
+  api-editing.test.ts                   # Editing API contract tests (22)
   fixtures/kindle-notebook-real.txt     # Real fixture file
 sample/
   kindle-export.txt                     # Sample My Clippings export
@@ -171,6 +175,8 @@ All responses: `{ data: T | null, error: { message, code } | null }`.
 |---|---|---|---|
 | `GET` | `/api/books` | | List all books |
 | `GET` | `/api/books/[id]` | | Single book |
+| `PATCH` | `/api/books/[id]` | `{ "canonical_title": "...", "canonical_author": "..." }` | Update book |
+| `DELETE` | `/api/books/[id]` | | Delete book + all highlights |
 | `GET` | `/api/books/[id]/highlights` | `limit`, `offset`, `sort` (sequence\|recent), `has_notes` | Paginated highlights |
 | `POST` | `/api/books/merge` | `{ "keep_id": "...", "merge_id": "..." }` | Merge duplicate books |
 
@@ -179,6 +185,8 @@ All responses: `{ data: T | null, error: { message, code } | null }`.
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/api/highlights/[id]` | Single highlight with book info |
+| `PATCH` | `/api/highlights/[id]` | Update highlight text/note (`{ "text": "...", "note_text": "..." }`) |
+| `DELETE` | `/api/highlights/[id]` | Delete highlight (updates book counts) |
 | `GET` | `/api/random` | Random highlight with book info |
 
 ### Search
@@ -217,3 +225,6 @@ Kindle notebook format parser, auto-detection, preview-before-commit import flow
 
 ### Sprint 3: Visual polish + deployment
 Complete UI overhaul mirroring the Fragmenta iOS design system. Dark journal-inspired aesthetic with 5-level surface hierarchy, ambient background glows, serif narrative text, chip-based filters, glass-effect cards. Added random highlight discovery feature. Git repo setup, GitHub push, Vercel deployment.
+
+### Sprint 4: Editing + management
+Inline editing of highlights (text + notes) and books (title, author) directly from the book detail page. PATCH/DELETE API endpoints for both highlights and books. Book management: rename, delete (with cascade), merge UI. Export improvements: better markdown formatting, per-book filenames, metadata headers. Responsive/mobile polish: touch targets, compact spacing, always-visible edit controls on touch devices. 54 tests (22 new for editing contracts).
