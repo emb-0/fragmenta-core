@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { getTopBooks } from '@/lib/supabase/db';
+import { transformBooks } from '@/lib/api/ios-compat';
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,7 +11,7 @@ export async function GET(request: NextRequest) {
     );
 
     const books = await getTopBooks(limit);
-    return Response.json({ data: books, error: null });
+    return Response.json({ data: transformBooks(books), error: null });
   } catch (err) {
     console.error('Stats top books error:', err);
     return Response.json(

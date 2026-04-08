@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { getHighlightsForBook } from '@/lib/supabase/db';
+import { buildPagination, pageToOffset, transformHighlight } from '@/lib/api/ios-compat';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -14,7 +15,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const url = new URL(request.url);
     const limit = Math.min(parseInt(url.searchParams.get('limit') || '100', 10), 500);
-    const offset = parseInt(url.searchParams.get('offset') || '0', 10);
+    // Accept both offset (web) and page (iOS) params
+    const pageParam = url.searchParams.get('page');
+    const offset = pageParam
+      ? pageToOffset(parseInt(pageParam, 10), limit)
+      : parseInt(url.searchParams.get('offset') || '0', 10);
     const sort = (url.searchParams.get('sort') || 'sequence') as 'sequence' | 'recent';
     const hasNotes = url.searchParams.get('has_notes') === 'true';
 
@@ -26,7 +31,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     });
 
     return Response.json({
-      data: { highlights, total, limit, offset },
+      data: {
+        highlights: highlights.map((h) => transformHighlight(h)),
+        total,
+        limit,
+        offset,
+        pagination: buildPagination(total, limit, offset),
+      },
       error: null,
     });
   } catch (err) {

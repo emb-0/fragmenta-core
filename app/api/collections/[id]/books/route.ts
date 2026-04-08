@@ -13,7 +13,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     const body = await req.json();
-    const { book_id } = body;
+    // Accept both web (book_id) and iOS (book_id from camelCase bookID)
+    const book_id = body.book_id || body.bookId;
 
     if (!book_id || typeof book_id !== 'string' || !/^[0-9a-f-]{36}$/.test(book_id)) {
       return Response.json(

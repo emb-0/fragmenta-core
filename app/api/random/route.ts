@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getRandomHighlight } from '@/lib/supabase/db';
+import { transformHighlight } from '@/lib/api/ios-compat';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,7 +15,10 @@ export async function GET() {
       );
     }
 
-    return NextResponse.json({ data: highlight, error: null });
+    return NextResponse.json({
+      data: transformHighlight(highlight, highlight.book),
+      error: null,
+    });
   } catch (err) {
     return NextResponse.json(
       { data: null, error: { message: err instanceof Error ? err.message : 'Internal error', code: 'internal' } },
