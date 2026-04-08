@@ -4,32 +4,21 @@ A personal reading highlights app built around Kindle highlight exports. Import 
 
 ## Stack
 
-- **Next.js 16** (App Router)
+- **Next.js 16** (App Router, Turbopack)
 - **TypeScript**
 - **Tailwind CSS 4**
 - **Supabase** (Postgres)
 - **Vercel** (deployment)
 
-## Design System
+---
 
-Sprint 3 introduced a dark, literary, journal-inspired design system mirroring the Fragmenta iOS app.
+## New-machine setup
 
-**Philosophy**: Quiet, intentional, premium. Content (passages, highlights, notes) takes center stage with UI that recedes behind it. Warm neutrals, serif quotations, soft depth layering, and ambient glow effects.
-
-**Tokens** (from iOS design system):
-- **Colors**: 5-level surface hierarchy (#07090C → #253040), muted blue-gray accent (#6D8AA8), warm taupe accent (#8E7D68)
-- **Typography**: System rounded for UI, Georgia serif for highlight passages (narrative text)
-- **Spacing**: 6pt base grid (6, 10, 16, 24, 32, 40)
-- **Radius**: 14 (small), 22 (medium), 28 (large), 34 (hero)
-- **Surfaces**: journal cards, section surfaces, inset surfaces, glass cards, field surfaces, chips
-
-**Components**: `surface-journal`, `surface-section`, `surface-inset`, `surface-glass`, `surface-field`, `chip`, `btn-prominent`, `btn-secondary`, `btn-ghost`
-
-## Setup
-
-### 1. Install dependencies
+### 1. Clone and install
 
 ```bash
+git clone git@github.com:emb-0/fragmenta-core.git
+cd fragmenta-core
 npm install
 ```
 
@@ -39,22 +28,22 @@ npm install
 cp .env.example .env.local
 ```
 
-| Variable | Description |
-|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | Your Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon/public key |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (Dashboard > Settings > API) |
-| `GOOGLE_BOOKS_API_KEY` | Google Books API key (server-side only, for cover enrichment) |
-| `ANTHROPIC_API_KEY` | Anthropic API key (server-side only, for AI book summaries — optional, feature degrades gracefully) |
+Open `.env.local` and fill in the values. See the [Environment variables](#environment-variables) section below for what each one does.
 
-### 3. Run database migrations
+The three Supabase vars are **required** — the server will not start without them. The two API keys are optional; their features degrade gracefully when unset.
 
-Apply migration files via the Supabase SQL Editor:
+### 3. Apply database migrations
 
-- `supabase/migrations/001_initial_schema.sql`
-- `supabase/migrations/002_sprint2_enhancements.sql`
-- `supabase/migrations/003_sprint5_enrichment.sql`
-- `supabase/migrations/004_sprint6_collections_ai.sql`
+Run these SQL files in order via the Supabase SQL Editor (Dashboard > SQL Editor):
+
+```
+supabase/migrations/001_initial_schema.sql
+supabase/migrations/002_sprint2_enhancements.sql
+supabase/migrations/003_sprint5_enrichment.sql
+supabase/migrations/004_sprint6_collections_ai.sql
+```
+
+These are idempotent — safe to re-run.
 
 ### 4. Run locally
 
@@ -70,20 +59,89 @@ Open [http://localhost:3000](http://localhost:3000).
 npm test
 ```
 
-### 6. Deploy to Vercel
+### 6. Build check
 
-1. Link repo to Vercel
-2. Set environment variables in Vercel dashboard (same 3 as above)
-3. Deploy — no special build config needed
+```bash
+npm run build
+```
 
-## Supported formats
+The build must pass cleanly before any deploy.
 
-Fragmenta auto-detects two Kindle export formats:
+---
+
+## Environment variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | **Required** | Supabase project URL — Dashboard > Settings > API > Project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | **Required** | Supabase anon/public key — Dashboard > Settings > API > anon public |
+| `SUPABASE_SERVICE_ROLE_KEY` | **Required** | Supabase service role key (server-side only) — Dashboard > Settings > API > service_role |
+| `GOOGLE_BOOKS_API_KEY` | Optional | Google Books API key (server-side only). Without it, enrichment is silently skipped. |
+| `ANTHROPIC_API_KEY` | Optional | Anthropic API key (server-side only). Without it, AI summary generation returns a clear error; rest of app unaffected. |
+
+**Startup validation**: `instrumentation.ts` runs on server start and throws immediately with a clear message if any required variable is missing. Optional vars are not checked.
+
+**Server-side-only keys**: `SUPABASE_SERVICE_ROLE_KEY`, `GOOGLE_BOOKS_API_KEY`, and `ANTHROPIC_API_KEY` are never prefixed with `NEXT_PUBLIC_` and are never sent to the browser.
+
+---
+
+## Next.js workspace root warning
+
+Next.js 16 (Turbopack) infers the workspace root by scanning for `package-lock.json` files. If a lockfile exists in a parent directory (e.g. `~/package-lock.json`), Next.js may infer the wrong root and emit a warning.
+
+**Fix** (already applied in `next.config.ts`):
+
+```ts
+turbopack: {
+  root: process.cwd(),
+}
+```
+
+This explicitly sets Turbopack's root to the project directory, overriding the inference. The warning disappears.
+
+---
+
+## iOS client — base URL guidance
+
+The iOS app communicates with Fragmenta's API. Base URL depends on where you are running:
+
+| Scenario | Base URL |
+|---|---|
+| Simulator on same Mac as dev server | `http://localhost:3000` |
+| Physical device on same Wi-Fi as dev server | `http://<your-mac-local-ip>:3000` (e.g. `http://192.168.1.x:3000`) |
+| Production | `https://fragmenta.vercel.app` (or your custom domain) |
+
+To find your Mac's local IP: `System Settings > Wi-Fi > Details > IP Address`, or run `ipconfig getifaddr en0`.
+
+All API endpoints are under `/api/`. See the [API Reference](#api-reference) section below for exact contracts.
+
+---
+
+## Supported import formats
 
 | Format | Source | Separator |
 |---|---|---|
 | **My Clippings.txt** | Kindle device export | `==========` between entries |
 | **Kindle Notebook** | read.amazon.com/notebook or Kindle app export | Double blank lines, `Title, Author` headers |
+
+---
+
+## Design system
+
+Sprint 3 introduced a dark, literary, journal-inspired design system mirroring the Fragmenta iOS app.
+
+**Philosophy**: Quiet, intentional, premium. Content (passages, highlights, notes) takes center stage with UI that recedes behind it. Warm neutrals, serif quotations, soft depth layering, and ambient glow effects.
+
+**Tokens** (from iOS design system):
+- **Colors**: 5-level surface hierarchy (#07090C → #253040), muted blue-gray accent (#6D8AA8), warm taupe accent (#8E7D68)
+- **Typography**: System rounded for UI, Georgia serif for highlight passages (narrative text)
+- **Spacing**: 6pt base grid (6, 10, 16, 24, 32, 40)
+- **Radius**: 14 (small), 22 (medium), 28 (large), 34 (hero)
+- **Surfaces**: journal cards, section surfaces, inset surfaces, glass cards, field surfaces, chips
+
+**Components**: `surface-journal`, `surface-section`, `surface-inset`, `surface-glass`, `surface-field`, `chip`, `btn-prominent`, `btn-secondary`, `btn-ghost`
+
+---
 
 ## Project structure
 
@@ -122,9 +180,8 @@ app/
     imports/kindle/route.ts             # POST - import highlights
     imports/kindle/preview/route.ts     # POST - preview import (dry run)
     imports/route.ts                    # GET  - list imports
-    imports/[id]/route.ts              # GET  - import detail
+    imports/[id]/route.ts               # GET  - import detail
     books/route.ts                      # GET  - list books
-    books/[id]/route.ts                 # GET, PATCH, DELETE - single book
     books/[id]/route.ts                 # GET, PATCH, DELETE - single book
     books/[id]/highlights/route.ts      # GET  - highlights for book
     books/[id]/summary/route.ts         # GET, POST - AI book summary (cached)
@@ -143,7 +200,7 @@ app/
     stats/overview/route.ts             # GET  - stats overview
     stats/activity/route.ts             # GET  - activity timeline
     stats/books/route.ts                # GET  - top books by highlights
-    share/highlight/[id]/route.tsx       # GET  - OG image share card
+    share/highlight/[id]/route.tsx      # GET  - OG image share card
 lib/
   types.ts                              # All TypeScript types
   parser/
@@ -160,6 +217,7 @@ lib/
   supabase/
     client.ts                           # Supabase client factories
     db.ts                               # All database operations
+instrumentation.ts                      # Server startup env validation
 public/
   manifest.json                         # PWA web app manifest
   sw.js                                 # Service worker (cache-first static, network-first pages)
@@ -180,9 +238,11 @@ sample/
   kindle-export.txt                     # Sample My Clippings export
 ```
 
+---
+
 ## API Reference
 
-All responses: `{ data: T | null, error: { message, code } | null }`.
+All responses use the envelope: `{ data: T | null, error: { message, code } | null }`.
 
 ### Import
 
@@ -248,7 +308,53 @@ Returns both matching highlights and matching books (by title/author).
 | `GET` | `/api/exports/csv` | `book_id` (optional) | `.csv` file download |
 | `GET` | `/api/exports/json` | `book_id` (optional) | `.json` file download |
 
-## Google Books Enrichment
+### Collections
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/collections` | List all collections |
+| `POST` | `/api/collections` | Create collection (`{ "name": "...", "description": "..." }`) |
+| `GET` | `/api/collections/[id]` | Collection detail with books |
+| `PATCH` | `/api/collections/[id]` | Update name/description |
+| `DELETE` | `/api/collections/[id]` | Delete collection (books are not deleted) |
+| `POST` | `/api/collections/[id]/books` | Add book (`{ "book_id": "..." }`) |
+| `DELETE` | `/api/collections/[id]/books/[bookId]` | Remove book from collection |
+
+### Stats & Insights
+
+| Method | Endpoint | Params | Description |
+|---|---|---|---|
+| `GET` | `/api/stats/overview` | | Book, highlight, note counts + avg per book |
+| `GET` | `/api/stats/activity` | `months` (default 6) | Highlights per month timeline |
+| `GET` | `/api/stats/books` | `limit` (default 10) | Top books by highlight count |
+
+The `/insights` page renders stats via direct Supabase queries in a server component (no API round-trip).
+
+### AI Book Summaries
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/books/[id]/summary` | Get cached summary (returns 404 if none) |
+| `POST` | `/api/books/[id]/summary` | Generate or regenerate summary |
+
+**Cache logic**: Summaries are cached by `highlight_count_at_generation`. If the highlight count hasn't changed, the cached summary is returned. POST forces regeneration.
+
+**Model**: `claude-sonnet-4-20250514`, 500 max tokens, temperature 0.3.
+
+**Graceful degradation**: If `ANTHROPIC_API_KEY` is not set, summary generation returns a clear error. The rest of the app is unaffected.
+
+### Share Cards
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/share/highlight/[id]` | Returns 1200×630 PNG image (ImageResponse via next/og) |
+| `GET` | `/api/share/highlight/[id]?download=1` | Returns image as attachment for download |
+
+The `/share/highlight/[id]` page provides a preview with share/download actions.
+
+---
+
+## Google Books enrichment
 
 Books can be enriched with cover art and metadata from the Google Books API. Enrichment is server-side only — the API key is never exposed to the client.
 
@@ -273,57 +379,9 @@ Books can be enriched with cover art and metadata from the Google Books API. Enr
 
 **Backfill**: POST `/api/books/enrich` with `{ "backfill": true }` to enrich up to 50 pending books. Throttled at 300ms between API calls.
 
-## Collections
+---
 
-User-defined book groupings. No auth — single-user app.
-
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/api/collections` | List all collections |
-| `POST` | `/api/collections` | Create collection (`{ "name": "...", "description": "..." }`) |
-| `GET` | `/api/collections/[id]` | Collection detail with books |
-| `PATCH` | `/api/collections/[id]` | Update name/description |
-| `DELETE` | `/api/collections/[id]` | Delete collection (books are not deleted) |
-| `POST` | `/api/collections/[id]/books` | Add book (`{ "book_id": "..." }`) |
-| `DELETE` | `/api/collections/[id]/books/[bookId]` | Remove book from collection |
-
-## Stats & Insights
-
-| Method | Endpoint | Params | Description |
-|---|---|---|---|
-| `GET` | `/api/stats/overview` | | Book, highlight, note counts + avg per book |
-| `GET` | `/api/stats/activity` | `months` (default 6) | Highlights per month timeline |
-| `GET` | `/api/stats/books` | `limit` (default 10) | Top books by highlight count |
-
-The `/insights` page renders stats via direct Supabase queries in a server component (no API round-trip).
-
-## AI Book Summaries
-
-Generates summaries of your highlights per book using the Anthropic Claude API.
-
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/api/books/[id]/summary` | Get cached summary (returns 404 if none) |
-| `POST` | `/api/books/[id]/summary` | Generate or regenerate summary |
-
-**Cache logic**: Summaries are cached by `highlight_count_at_generation`. If the highlight count hasn't changed, the cached summary is returned. POST forces regeneration.
-
-**Model**: `claude-sonnet-4-20250514`, 500 max tokens, temperature 0.3.
-
-**Graceful degradation**: If `ANTHROPIC_API_KEY` is not set, summary generation returns a clear error. The rest of the app is unaffected.
-
-## Share Cards
-
-OG-style image cards for sharing highlights. Dark literary design matching the Fragmenta aesthetic.
-
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/api/share/highlight/[id]` | Returns 1200x630 PNG image (ImageResponse via next/og) |
-| `GET` | `/api/share/highlight/[id]?download=1` | Returns image as attachment for download |
-
-The `/share/highlight/[id]` page provides a preview with share/download actions.
-
-## PWA / Offline Support
+## PWA / offline support
 
 Fragmenta is installable as a Progressive Web App.
 
@@ -331,6 +389,8 @@ Fragmenta is installable as a Progressive Web App.
 - **Service worker**: `public/sw.js` — cache-first for static assets (`_next/`), network-first for pages (falls back to cache, then `/offline`), network-first for API GETs
 - **Offline page**: `/offline` — friendly message with retry button
 - **Icon**: `public/icon-192.svg`
+
+---
 
 ## Database schema
 
@@ -341,6 +401,8 @@ Six tables: `imports`, `books`, `highlights`, `collections`, `collection_books`,
 - **Triggers**: `highlight_count` and `note_count` auto-update. `updated_at` auto-updates.
 - **Raw preservation**: Every import stores full raw text. Every highlight stores its raw block.
 - **Canonicalization**: Titles/authors are cleaned (whitespace, HTML entities, "and and" artifacts) while raw values are preserved.
+
+---
 
 ## Sprint history
 
@@ -360,4 +422,7 @@ Inline editing of highlights (text + notes) and books (title, author) directly f
 Google Books enrichment layer: server-side API integration with Jaccard confidence scoring, cache-first architecture, backfill support. New bookshelf route with visual cover grid, fallback typographic covers, hover animations. Cover art displayed on book detail pages with "Find cover" button. Enrichment API: single-book and batch backfill endpoints. `next/image` optimization for cover images. New migration adding 11 enrichment columns to books table. Nav updated with Shelf link. 78 tests (24 new for matching/enrichment).
 
 ### Sprint 6: Insights, collections, share cards, AI summaries, PWA
-Reading stats/insights page with server-side parallel queries (book/highlight/note counts, top-10 most annotated, recent highlights). Collections system for user-defined book groupings (full CRUD + add/remove books). Share card generation for highlights via `next/og` ImageResponse (1200x630 dark literary design). AI-powered book summaries via Anthropic Claude API with cache invalidation by highlight count. PWA support: web app manifest, service worker (cache-first static, network-first pages with offline fallback), installable on mobile. Stats API endpoints. New migration adding 3 tables (collections, collection_books, book_summaries). Nav updated with Insights link. 98 tests (20 new for Sprint 6 features).
+Reading stats/insights page with server-side parallel queries (book/highlight/note counts, top-10 most annotated, recent highlights). Collections system for user-defined book groupings (full CRUD + add/remove books). Share card generation for highlights via `next/og` ImageResponse (1200×630 dark literary design). AI-powered book summaries via Anthropic Claude API with cache invalidation by highlight count. PWA support: web app manifest, service worker (cache-first static, network-first pages with offline fallback), installable on mobile. Stats API endpoints. New migration adding 3 tables (collections, collection_books, book_summaries). Nav updated with Insights link. 98 tests (20 new for Sprint 6 features).
+
+### Sprint 7: Stability, environment, and dev/prod parity
+Local environment hardening for multi-machine development. Updated `.env.example` with all required and optional vars. Added `instrumentation.ts` for server-startup env validation (fails loudly on missing required vars, graceful degradation for optional vars). Fixed Next.js Turbopack workspace-root warning via `turbopack.root` in `next.config.ts`. README rewritten with new-machine setup guide, env var documentation, iOS base URL guidance, and consolidated API reference. Build and tests validated on Mac mini.
