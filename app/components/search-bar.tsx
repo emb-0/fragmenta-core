@@ -13,21 +13,45 @@ export function SearchBar({ initialQuery }: { initialQuery?: string }) {
   }
 
   return (
-    <div className="flex gap-2">
-      <input
-        type="text"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") handleSearch();
-        }}
-        placeholder="Search highlights, notes, titles, authors..."
-        className="flex-1 rounded-md border border-border bg-surface px-3 py-2 text-sm placeholder:text-muted/50 focus:outline-none focus:ring-1 focus:ring-accent"
-      />
+    <div className="flex gap-3" style={{ alignItems: 'stretch' }}>
+      <div className="surface-field flex-1 flex items-center gap-3" style={{ padding: '0 var(--sp-md)' }}>
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="var(--text-tertiary)"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{ flexShrink: 0 }}
+        >
+          <circle cx="7" cy="7" r="5" />
+          <path d="M11 11L14 14" />
+        </svg>
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") handleSearch();
+          }}
+          placeholder="Search highlights, notes, titles, authors..."
+          style={{
+            flex: 1,
+            background: 'transparent',
+            border: 'none',
+            outline: 'none',
+            color: 'var(--text-primary)',
+            fontSize: 'var(--font-body)',
+            padding: 'var(--sp-md) 0',
+          }}
+        />
+      </div>
       <button
         onClick={handleSearch}
         disabled={!query.trim()}
-        className="btn-primary"
+        className="btn-prominent"
       >
         Search
       </button>

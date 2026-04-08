@@ -9,70 +9,103 @@ export default async function ImportsPage() {
     imports = await listImports();
   } catch {
     return (
-      <div className="max-w-4xl mx-auto px-6 py-12">
-        <h1 className="text-2xl font-semibold tracking-tight mb-6">Import History</h1>
-        <p className="text-muted">Unable to connect to the database.</p>
+      <div className="page-container">
+        <div className="section-header">
+          <p className="text-eyebrow" style={{ marginBottom: 'var(--sp-xs)' }}>Archive</p>
+          <h1 className="text-large-title text-text-1">Import History</h1>
+        </div>
+        <div className="surface-section" style={{ textAlign: 'center' }}>
+          <p className="text-body" style={{ color: 'var(--text-tertiary)' }}>Unable to connect to the database.</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-12">
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-2xl font-semibold tracking-tight">Import History</h1>
-        <Link href="/import" className="text-sm text-muted hover:text-foreground transition-colors">
-          + New import
-        </Link>
+    <div className="page-container">
+      {/* Header */}
+      <div className="section-header">
+        <div className="flex items-center justify-between" style={{ marginBottom: 'var(--sp-xs)' }}>
+          <p className="text-eyebrow">Archive</p>
+          <Link href="/import" className="chip" style={{ fontSize: 'var(--font-chip)' }}>
+            + New import
+          </Link>
+        </div>
+        <h1 className="text-large-title text-text-1">Import History</h1>
       </div>
 
       {imports.length === 0 ? (
-        <div className="text-center py-16 space-y-3">
-          <p className="text-muted text-lg">No imports yet.</p>
-          <p className="text-muted text-sm">
-            <Link href="/import" className="underline hover:text-foreground">Import your first Kindle highlights</Link>.
+        <div className="surface-section" style={{ textAlign: 'center', padding: 'var(--sp-2xl) var(--sp-lg)' }}>
+          <p className="text-body-em text-text-2" style={{ marginBottom: 'var(--sp-sm)' }}>
+            No imports yet.
+          </p>
+          <p className="text-body" style={{ color: 'var(--text-tertiary)' }}>
+            <Link href="/import" style={{ color: 'var(--accent)', textDecoration: 'underline', textUnderlineOffset: '3px' }}>
+              Import your first Kindle highlights
+            </Link>.
           </p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="flex flex-col" style={{ gap: 'var(--sp-sm)' }}>
           {imports.map((imp) => {
             const summary = imp.import_summary;
             const status = imp.parse_status;
-            const statusColor = status === "completed" ? "bg-green-500" : status === "failed" ? "bg-red-500" : "bg-amber-500";
+
+            const statusConfig = {
+              completed: { color: 'var(--success)', label: 'Completed' },
+              failed: { color: 'var(--negative)', label: 'Failed' },
+              processing: { color: 'var(--warning)', label: 'Processing' },
+              pending: { color: 'var(--warning)', label: 'Pending' },
+            }[status] || { color: 'var(--text-tertiary)', label: status };
 
             return (
               <Link
                 key={imp.id}
                 href={`/imports/${imp.id}`}
-                className="block px-4 py-3.5 -mx-4 rounded-lg hover:bg-surface transition-colors group"
+                className="surface-journal interactive block"
+                style={{ textDecoration: 'none' }}
               >
                 <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-1.5 h-1.5 rounded-full ${statusColor}`} />
-                      <span className="font-medium text-sm">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2" style={{ marginBottom: '4px' }}>
+                      <div
+                        style={{
+                          width: '8px',
+                          height: '8px',
+                          borderRadius: '50%',
+                          backgroundColor: statusConfig.color,
+                          flexShrink: 0,
+                        }}
+                      />
+                      <span className="text-card-title text-text-1" style={{ fontSize: 'var(--font-body-em)' }}>
                         {imp.filename || `Import ${imp.id.slice(0, 8)}`}
                       </span>
                     </div>
-                    <div className="text-xs text-muted mt-1 flex gap-3">
-                      <span>{imp.source_type}</span>
+                    <div className="flex flex-wrap items-center gap-2" style={{ marginTop: 'var(--sp-xs)' }}>
+                      <span className="chip" style={{ cursor: 'default', pointerEvents: 'none', fontSize: 'var(--font-eyebrow)' }}>
+                        {imp.source_type === 'kindle_notebook' ? 'Notebook' : 'Clippings'}
+                      </span>
                       {summary && (
                         <>
-                          <span>{summary.books_found || 0} books</span>
-                          <span>{summary.highlights_created || 0} highlights</span>
+                          <span className="text-meta" style={{ color: 'var(--text-tertiary)' }}>
+                            {summary.books_found || 0} books
+                          </span>
+                          <span className="text-meta" style={{ color: 'var(--text-tertiary)' }}>
+                            {summary.highlights_created || 0} highlights
+                          </span>
                           {(summary.highlights_skipped_duplicate || 0) > 0 && (
-                            <span>{summary.highlights_skipped_duplicate} dupes</span>
+                            <span className="text-meta" style={{ color: 'var(--warning)' }}>
+                              {summary.highlights_skipped_duplicate} dupes
+                            </span>
                           )}
                         </>
                       )}
                     </div>
                   </div>
-                  <span className="text-xs text-muted whitespace-nowrap">
+                  <span className="text-meta" style={{ color: 'var(--text-tertiary)', whiteSpace: 'nowrap', flexShrink: 0 }}>
                     {new Date(imp.created_at).toLocaleDateString("en-US", {
                       month: "short",
                       day: "numeric",
-                      year: "numeric",
-                      hour: "numeric",
-                      minute: "2-digit",
                     })}
                   </span>
                 </div>

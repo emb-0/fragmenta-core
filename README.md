@@ -10,6 +10,21 @@ A personal reading highlights app built around Kindle highlight exports. Import 
 - **Supabase** (Postgres)
 - **Vercel** (deployment)
 
+## Design System
+
+Sprint 3 introduced a dark, literary, journal-inspired design system mirroring the Fragmenta iOS app.
+
+**Philosophy**: Quiet, intentional, premium. Content (passages, highlights, notes) takes center stage with UI that recedes behind it. Warm neutrals, serif quotations, soft depth layering, and ambient glow effects.
+
+**Tokens** (from iOS design system):
+- **Colors**: 5-level surface hierarchy (#07090C → #253040), muted blue-gray accent (#6D8AA8), warm taupe accent (#8E7D68)
+- **Typography**: System rounded for UI, Georgia serif for highlight passages (narrative text)
+- **Spacing**: 6pt base grid (6, 10, 16, 24, 32, 40)
+- **Radius**: 14 (small), 22 (medium), 28 (large), 34 (hero)
+- **Surfaces**: journal cards, section surfaces, inset surfaces, glass cards, field surfaces, chips
+
+**Components**: `surface-journal`, `surface-section`, `surface-inset`, `surface-glass`, `surface-field`, `chip`, `btn-prominent`, `btn-secondary`, `btn-ghost`
+
 ## Setup
 
 ### 1. Install dependencies
@@ -32,7 +47,7 @@ cp .env.example .env.local
 
 ### 3. Run database migrations
 
-Apply both migration files via the Supabase SQL Editor:
+Apply migration files via the Supabase SQL Editor:
 
 - `supabase/migrations/001_initial_schema.sql`
 - `supabase/migrations/002_sprint2_enhancements.sql`
@@ -70,18 +85,19 @@ Fragmenta auto-detects two Kindle export formats:
 
 ```
 app/
-  page.tsx                              # Home
-  layout.tsx                            # Root layout with nav + export links
+  page.tsx                              # Home with stats + random highlight teaser
+  layout.tsx                            # Root layout: sticky nav, ambient glows, footer
   import/page.tsx                       # Import with preview-first flow
-  library/page.tsx                      # Book library with sort/filter
-  books/[id]/page.tsx                   # Book detail + highlights
-  search/page.tsx                       # Full search page
+  library/page.tsx                      # Book library with chip sort/filter
+  books/[id]/page.tsx                   # Book detail: hero card, highlight cards
+  search/page.tsx                       # Full search page with filters
+  random/page.tsx                       # Random highlight discovery
   imports/page.tsx                      # Import history
-  imports/[id]/page.tsx                 # Import detail
+  imports/[id]/page.tsx                 # Import detail with stat cards
   components/
     import-form.tsx                     # Client: preview → confirm import
-    search-bar.tsx                      # Client: search input
-    copy-button.tsx                     # Client: copy highlight text
+    search-bar.tsx                      # Client: search field with icon
+    copy-button.tsx                     # Client: copy with citation support
   api/
     imports/kindle/route.ts             # POST - import highlights
     imports/kindle/preview/route.ts     # POST - preview import (dry run)
@@ -93,6 +109,7 @@ app/
     books/merge/route.ts                # POST - merge duplicate books
     highlights/[id]/route.ts            # GET  - single highlight
     search/route.ts                     # GET  - search highlights + books
+    random/route.ts                     # GET  - random highlight
     exports/markdown/route.ts           # GET  - markdown export
     exports/csv/route.ts                # GET  - CSV export
     exports/json/route.ts               # GET  - JSON export
@@ -162,6 +179,7 @@ All responses: `{ data: T | null, error: { message, code } | null }`.
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/api/highlights/[id]` | Single highlight with book info |
+| `GET` | `/api/random` | Random highlight with book info |
 
 ### Search
 
@@ -188,3 +206,14 @@ Three tables: `imports`, `books`, `highlights`.
 - **Triggers**: `highlight_count` and `note_count` auto-update. `updated_at` auto-updates.
 - **Raw preservation**: Every import stores full raw text. Every highlight stores its raw block.
 - **Canonicalization**: Titles/authors are cleaned (whitespace, HTML entities, "and and" artifacts) while raw values are preserved.
+
+## Sprint history
+
+### Sprint 1: Foundation
+Database schema, Kindle My Clippings.txt parser, API endpoints, web app scaffold, Supabase integration.
+
+### Sprint 2: Daily usability
+Kindle notebook format parser, auto-detection, preview-before-commit import flow, import history, search overhaul, exports, library sorting/filtering, book merge, canonicalization, 32 tests.
+
+### Sprint 3: Visual polish + deployment
+Complete UI overhaul mirroring the Fragmenta iOS design system. Dark journal-inspired aesthetic with 5-level surface hierarchy, ambient background glows, serif narrative text, chip-based filters, glass-effect cards. Added random highlight discovery feature. Git repo setup, GitHub push, Vercel deployment.

@@ -6,13 +6,18 @@ export const metadata = {
 
 export default function ImportPage() {
   return (
-    <div className="max-w-4xl mx-auto px-6 py-12">
-      <h1 className="text-2xl font-semibold tracking-tight mb-2">
-        Import highlights
-      </h1>
-      <p className="text-muted mb-8">
-        Paste your Kindle highlights export or upload the <code className="text-xs bg-surface px-1.5 py-0.5 rounded border border-border">My Clippings.txt</code> file.
-      </p>
+    <div className="page-container">
+      <div className="section-header">
+        <p className="text-eyebrow" style={{ marginBottom: 'var(--sp-xs)' }}>Add to Library</p>
+        <h1 className="text-large-title text-text-1" style={{ marginBottom: 'var(--sp-sm)' }}>
+          Import highlights
+        </h1>
+        <p className="text-body" style={{ color: 'var(--text-secondary)' }}>
+          Upload your Kindle highlights export or paste the text directly.
+          Supports both <span style={{ color: 'var(--text-primary)' }}>My Clippings.txt</span> and{" "}
+          <span style={{ color: 'var(--text-primary)' }}>Kindle notebook</span> formats.
+        </p>
+      </div>
 
       <ImportForm />
     </div>

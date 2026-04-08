@@ -27,81 +27,110 @@ export default async function SearchPage({
     ]);
   }
 
-  return (
-    <div className="max-w-4xl mx-auto px-6 py-12">
-      <h1 className="text-2xl font-semibold tracking-tight mb-6">Search</h1>
+  const sortOptions = [
+    { value: "relevance" as const, label: "Relevance" },
+    { value: "recent" as const, label: "Recent" },
+    { value: "book" as const, label: "By book" },
+  ];
 
+  return (
+    <div className="page-container">
+      {/* Header */}
+      <div className="section-header">
+        <p className="text-eyebrow" style={{ marginBottom: 'var(--sp-xs)' }}>Discover</p>
+        <h1 className="text-large-title text-text-1">Search</h1>
+      </div>
+
+      {/* Search input */}
       <SearchBar initialQuery={q} />
 
-      {q.trim() && highlightResults && (
-        <div className="mt-8">
-          {/* Sort controls */}
-          <div className="flex items-center gap-4 mb-4 text-xs text-muted">
-            <span>Sort:</span>
-            {(["relevance", "recent", "book"] as const).map((s) => (
+      {/* Results */}
+      {q.trim() && highlightResults ? (
+        <div style={{ marginTop: 'var(--sp-xl)' }}>
+          {/* Filter chips */}
+          <div className="flex flex-wrap items-center gap-2" style={{ marginBottom: 'var(--sp-lg)' }}>
+            {sortOptions.map((s) => (
               <Link
-                key={s}
-                href={`/search?q=${encodeURIComponent(q)}&sort=${s}${hasNotes ? "&has_notes=true" : ""}${bookId ? `&book_id=${bookId}` : ""}`}
-                className={`hover:text-foreground ${sort === s ? "text-foreground font-medium" : ""}`}
+                key={s.value}
+                href={`/search?q=${encodeURIComponent(q)}&sort=${s.value}${hasNotes ? "&has_notes=true" : ""}${bookId ? `&book_id=${bookId}` : ""}`}
+                className="chip"
+                data-active={sort === s.value}
               >
-                {s.charAt(0).toUpperCase() + s.slice(1)}
+                {s.label}
               </Link>
             ))}
-            <span>|</span>
+            <div style={{ width: '1px', height: '20px', background: 'var(--border-subtle)', margin: '0 4px' }} />
             <Link
               href={`/search?q=${encodeURIComponent(q)}&sort=${sort}${hasNotes ? "" : "&has_notes=true"}${bookId ? `&book_id=${bookId}` : ""}`}
-              className={`hover:text-foreground ${hasNotes ? "text-foreground font-medium" : ""}`}
+              className="chip"
+              data-active={!!hasNotes}
             >
-              {hasNotes ? "All" : "Notes only"}
+              Notes only
             </Link>
           </div>
 
           {/* Book matches */}
           {bookResults && bookResults.length > 0 && (
-            <div className="mb-6">
-              <h2 className="text-xs font-medium text-muted uppercase tracking-wide mb-2">Matching books</h2>
+            <div style={{ marginBottom: 'var(--sp-lg)' }}>
+              <p className="text-eyebrow" style={{ marginBottom: 'var(--sp-sm)' }}>Matching books</p>
               <div className="flex flex-wrap gap-2">
                 {bookResults.map((b) => (
                   <Link
                     key={b.id}
                     href={`/books/${b.id}`}
-                    className="text-sm px-3 py-1.5 bg-surface border border-border rounded-md hover:border-accent transition-colors"
+                    className="chip hover-lift"
+                    style={{ color: 'var(--accent)' }}
                   >
                     {b.canonical_title}
-                    {b.canonical_author && <span className="text-muted"> — {b.canonical_author}</span>}
+                    {b.canonical_author && (
+                      <span style={{ color: 'var(--text-tertiary)', fontWeight: 400 }}> — {b.canonical_author}</span>
+                    )}
                   </Link>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Highlight matches */}
-          <p className="text-xs text-muted mb-4">
+          {/* Result count */}
+          <p className="text-meta" style={{ marginBottom: 'var(--sp-md)', color: 'var(--text-tertiary)' }}>
             {highlightResults.total} highlight{highlightResults.total !== 1 ? "s" : ""} found
-            {offset > 0 && ` (showing ${offset + 1}–${Math.min(offset + limit, highlightResults.total)})`}
+            {offset > 0 && ` (${offset + 1}–${Math.min(offset + limit, highlightResults.total)})`}
           </p>
 
+          {/* Highlight results */}
           {highlightResults.results.length === 0 ? (
-            <p className="text-muted text-sm py-8 text-center">
-              No highlights found for &ldquo;{q}&rdquo;
-            </p>
+            <div className="surface-section" style={{ textAlign: 'center', padding: 'var(--sp-2xl) var(--sp-lg)' }}>
+              <p className="text-body" style={{ color: 'var(--text-tertiary)' }}>
+                No highlights found for &ldquo;{q}&rdquo;
+              </p>
+            </div>
           ) : (
-            <div className="space-y-4">
+            <div className="flex flex-col" style={{ gap: 'var(--sp-sm)' }}>
               {highlightResults.results.map((r) => (
                 <Link
                   key={r.highlight.id}
                   href={`/books/${r.book.id}#h-${r.highlight.id}`}
-                  className="block border-l-2 border-border pl-4 py-2 hover:border-accent transition-colors"
+                  className="surface-journal interactive block"
+                  style={{ textDecoration: 'none' }}
                 >
-                  <p className="text-sm font-serif leading-relaxed line-clamp-3">
+                  <p
+                    className="text-narrative"
+                    style={{
+                      display: '-webkit-box',
+                      WebkitLineClamp: 3,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden',
+                      fontSize: 'var(--font-body)',
+                    }}
+                  >
                     {r.highlight.text}
                   </p>
                   {r.highlight.note_text && (
-                    <p className="text-xs text-muted mt-1 italic line-clamp-1">
-                      Note: {r.highlight.note_text}
+                    <p className="text-meta" style={{ marginTop: 'var(--sp-xs)', color: 'var(--accent-soft)', fontStyle: 'italic' }}>
+                      Note: {r.highlight.note_text.length > 80 ? r.highlight.note_text.slice(0, 80) + '...' : r.highlight.note_text}
                     </p>
                   )}
-                  <p className="text-xs text-muted mt-1">
+                  <p className="text-meta" style={{ marginTop: 'var(--sp-sm)', color: 'var(--text-tertiary)' }}>
                     {r.book.canonical_title}
                     {r.book.canonical_author && ` — ${r.book.canonical_author}`}
                   </p>
@@ -112,33 +141,39 @@ export default async function SearchPage({
 
           {/* Pagination */}
           {highlightResults.total > limit && (
-            <div className="flex items-center gap-4 mt-8 text-sm">
+            <div className="flex items-center gap-3" style={{ marginTop: 'var(--sp-xl)' }}>
               {offset > 0 && (
                 <Link
                   href={`/search?q=${encodeURIComponent(q)}&sort=${sort}&offset=${Math.max(0, offset - limit)}${hasNotes ? "&has_notes=true" : ""}`}
-                  className="text-muted hover:text-foreground"
+                  className="btn-secondary"
                 >
-                  &larr; Previous
+                  Previous
                 </Link>
               )}
+              <span className="text-meta" style={{ color: 'var(--text-tertiary)' }}>
+                Page {Math.floor(offset / limit) + 1} of {Math.ceil(highlightResults.total / limit)}
+              </span>
               {offset + limit < highlightResults.total && (
                 <Link
                   href={`/search?q=${encodeURIComponent(q)}&sort=${sort}&offset=${offset + limit}${hasNotes ? "&has_notes=true" : ""}`}
-                  className="text-muted hover:text-foreground"
+                  className="btn-secondary"
                 >
-                  Next &rarr;
+                  Next
                 </Link>
               )}
             </div>
           )}
         </div>
-      )}
-
-      {!q.trim() && (
-        <p className="text-muted text-sm mt-8 text-center">
-          Search across all your highlights, notes, book titles, and authors.
-        </p>
-      )}
+      ) : !q.trim() ? (
+        <div className="surface-section" style={{ textAlign: 'center', marginTop: 'var(--sp-xl)', padding: 'var(--sp-2xl) var(--sp-lg)' }}>
+          <p className="text-body-em text-text-2" style={{ marginBottom: 'var(--sp-xs)' }}>
+            Search your entire library
+          </p>
+          <p className="text-body" style={{ color: 'var(--text-tertiary)' }}>
+            Highlights, notes, book titles, and authors.
+          </p>
+        </div>
+      ) : null}
     </div>
   );
 }

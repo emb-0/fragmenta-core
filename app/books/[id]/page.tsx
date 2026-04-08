@@ -32,68 +32,127 @@ export default async function BookDetailPage({
   });
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-12">
-      <Link href="/library" className="text-sm text-muted hover:text-foreground transition-colors">
-        &larr; Library
+    <div className="page-container">
+      {/* Back nav */}
+      <Link
+        href="/library"
+        className="btn-ghost"
+        style={{ marginLeft: '-8px', marginBottom: 'var(--sp-md)' }}
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M10 12L6 8L10 4" />
+        </svg>
+        Library
       </Link>
 
-      <div className="mt-6 mb-8">
-        <h1 className="text-2xl font-semibold tracking-tight">{book.canonical_title}</h1>
-        {book.canonical_author && <p className="text-muted mt-1">{book.canonical_author}</p>}
-        <div className="flex items-center gap-4 mt-2 text-sm text-muted">
-          <span>{total} highlights</span>
-          {book.note_count > 0 && <span>{book.note_count} notes</span>}
+      {/* Book hero */}
+      <div className="surface-glass" style={{ marginBottom: 'var(--sp-xl)', position: 'relative' }}>
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          <p className="text-eyebrow" style={{ marginBottom: 'var(--sp-sm)' }}>Book</p>
+          <h1 className="text-display text-text-1" style={{ marginBottom: 'var(--sp-xs)' }}>
+            {book.canonical_title}
+          </h1>
+          {book.canonical_author && (
+            <p className="text-body-em" style={{ color: 'var(--text-secondary)', marginBottom: 'var(--sp-lg)' }}>
+              {book.canonical_author}
+            </p>
+          )}
+
+          {/* Metrics row */}
+          <div className="flex gap-3">
+            <div className="surface-inset flex-1 text-center">
+              <p className="text-eyebrow" style={{ marginBottom: '2px' }}>Highlights</p>
+              <p className="text-card-title text-text-1">{total}</p>
+            </div>
+            {book.note_count > 0 && (
+              <div className="surface-inset flex-1 text-center">
+                <p className="text-eyebrow" style={{ marginBottom: '2px' }}>Notes</p>
+                <p className="text-card-title text-text-1">{book.note_count}</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Sort/filter */}
-      <div className="flex items-center gap-4 mb-6 text-xs text-muted">
-        <span>Sort:</span>
+      {/* Controls */}
+      <div className="flex flex-wrap items-center gap-2" style={{ marginBottom: 'var(--sp-lg)' }}>
         <Link
           href={`/books/${id}?sort=sequence${hasNotes ? "&has_notes=true" : ""}`}
-          className={`hover:text-foreground ${sort === "sequence" ? "text-foreground font-medium" : ""}`}
+          className="chip"
+          data-active={sort === "sequence"}
         >
-          Order
+          Original order
         </Link>
         <Link
           href={`/books/${id}?sort=recent${hasNotes ? "&has_notes=true" : ""}`}
-          className={`hover:text-foreground ${sort === "recent" ? "text-foreground font-medium" : ""}`}
+          className="chip"
+          data-active={sort === "recent"}
         >
-          Recent
+          Recent first
         </Link>
-        <span>|</span>
+        <div style={{ width: '1px', height: '20px', background: 'var(--border-subtle)', margin: '0 4px' }} />
         <Link
           href={hasNotes ? `/books/${id}?sort=${sort}` : `/books/${id}?sort=${sort}&has_notes=true`}
-          className={`hover:text-foreground ${hasNotes ? "text-foreground font-medium" : ""}`}
+          className="chip"
+          data-active={hasNotes}
         >
-          {hasNotes ? "All" : "Notes only"}
+          Notes only
         </Link>
-        <span className="ml-auto">
-          <a
-            href={`/api/exports/markdown?book_id=${id}`}
-            className="hover:text-foreground transition-colors"
-          >
-            Export
-          </a>
-        </span>
+        <div className="flex-1" />
+        <a
+          href={`/api/exports/markdown?book_id=${id}`}
+          className="chip"
+          style={{ color: 'var(--accent)' }}
+        >
+          Export
+        </a>
       </div>
 
+      {/* Highlights */}
       {highlights.length === 0 ? (
-        <p className="text-muted py-8 text-center">No highlights match your filters.</p>
+        <div className="surface-section" style={{ textAlign: 'center', padding: 'var(--sp-2xl) var(--sp-lg)' }}>
+          <p className="text-body" style={{ color: 'var(--text-tertiary)' }}>
+            No highlights match your filters.
+          </p>
+        </div>
       ) : (
-        <div className="space-y-6">
-          {highlights.map((h) => (
-            <div key={h.id} id={`h-${h.id}`} className="border-l-2 border-border pl-5 py-1 group">
-              <p className="font-serif text-base leading-relaxed whitespace-pre-wrap">{h.text}</p>
-              {h.note_text && (
-                <p className="text-sm text-muted mt-2 italic">Note: {h.note_text}</p>
-              )}
-              <div className="flex items-center gap-3 mt-2">
-                {h.source_location && <span className="text-xs text-muted">{h.source_location}</span>}
+        <div className="flex flex-col" style={{ gap: 'var(--sp-md)' }}>
+          {highlights.map((h, idx) => (
+            <div
+              key={h.id}
+              id={`h-${h.id}`}
+              className="surface-journal group"
+              style={{ scrollMarginTop: '80px' }}
+            >
+              {/* Sequence number */}
+              <div className="flex items-start justify-between" style={{ marginBottom: 'var(--sp-sm)' }}>
+                <span className="text-eyebrow" style={{ color: 'var(--text-tertiary)' }}>
+                  {sort === "sequence" ? `#${h.sequence_number || idx + 1}` : ''}
+                </span>
                 <span className="opacity-0 group-hover:opacity-100 transition-opacity">
                   <CopyButton text={h.text} />
                 </span>
               </div>
+
+              {/* Highlight text */}
+              <p className="text-narrative" style={{ whiteSpace: 'pre-wrap' }}>
+                {h.text}
+              </p>
+
+              {/* Note */}
+              {h.note_text && (
+                <div className="surface-inset" style={{ marginTop: 'var(--sp-md)' }}>
+                  <p className="text-eyebrow" style={{ marginBottom: '4px', color: 'var(--accent-soft)' }}>Note</p>
+                  <p className="text-body" style={{ color: 'var(--text-secondary)' }}>{h.note_text}</p>
+                </div>
+              )}
+
+              {/* Metadata */}
+              {h.source_location && (
+                <p className="text-meta" style={{ marginTop: 'var(--sp-sm)', color: 'var(--text-tertiary)', fontSize: 'var(--font-chip)' }}>
+                  {h.source_location}
+                </p>
+              )}
             </div>
           ))}
         </div>

@@ -521,6 +521,73 @@ export async function exportAllHighlights(options?: {
 }
 
 // =============================================================================
+// Random highlight
+// =============================================================================
+
+export async function getRandomHighlight(): Promise<(Highlight & { book: Pick<Book, 'id' | 'canonical_title' | 'canonical_author'> }) | null> {
+  const supabase = createServerClient();
+
+  // Get total count
+  const { count } = await supabase
+    .from('highlights')
+    .select('*', { count: 'exact', head: true });
+
+  if (!count || count === 0) return null;
+
+  const randomOffset = Math.floor(Math.random() * count);
+
+  const { data, error } = await supabase
+    .from('highlights')
+    .select('*, books!inner(id, canonical_title, canonical_author)')
+    .range(randomOffset, randomOffset)
+    .single();
+
+  if (error || !data) return null;
+
+  const row = data as Record<string, unknown>;
+  const books = row.books as Record<string, unknown>;
+  return {
+    ...extractHighlight(row),
+    book: {
+      id: books.id as string,
+      canonical_title: books.canonical_title as string,
+      canonical_author: books.canonical_author as string | null,
+    },
+  };
+}
+
+// =============================================================================
+// Stats
+// =============================================================================
+
+export async function getLibraryStats(): Promise<{
+  bookCount: number;
+  highlightCount: number;
+  noteCount: number;
+}> {
+  const supabase = createServerClient();
+
+  const { count: bookCount } = await supabase
+    .from('books')
+    .select('*', { count: 'exact', head: true });
+
+  const { count: highlightCount } = await supabase
+    .from('highlights')
+    .select('*', { count: 'exact', head: true });
+
+  const { count: noteCount } = await supabase
+    .from('highlights')
+    .select('*', { count: 'exact', head: true })
+    .not('note_text', 'is', null);
+
+  return {
+    bookCount: bookCount || 0,
+    highlightCount: highlightCount || 0,
+    noteCount: noteCount || 0,
+  };
+}
+
+// =============================================================================
 // Helpers
 // =============================================================================
 

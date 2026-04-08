@@ -47,10 +47,9 @@ export function ImportForm() {
   const [preview, setPreview] = useState<PreviewData | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
+  const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
-
-  // The raw text or file to import — stored for the commit step
   const pendingFileRef = useRef<File | null>(null);
 
   async function handlePreview(source: "paste" | "file", file?: File) {
@@ -65,7 +64,6 @@ export function ImportForm() {
         const formData = new FormData();
         formData.append("file", file);
         res = await fetch("/api/imports/kindle/preview", { method: "POST", body: formData });
-        // Also read the text for potential paste-commit later
         setText(await file.text());
       } else {
         pendingFileRef.current = null;
@@ -132,76 +130,106 @@ export function ImportForm() {
     pendingFileRef.current = null;
   }
 
+  // =========================================================================
   // Success view
+  // =========================================================================
   if (state === "success" && result) {
     const s = result.summary;
     return (
-      <div className="space-y-6">
-        <div className="bg-surface border border-border rounded-lg p-6 space-y-4">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-green-500" />
-            <h2 className="font-semibold text-lg">Import complete</h2>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-lg)' }}>
+        <div className="surface-glass">
+          <div style={{ position: 'relative', zIndex: 1 }}>
+            <div className="flex items-center gap-2" style={{ marginBottom: 'var(--sp-md)' }}>
+              <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: 'var(--success)' }} />
+              <h2 className="text-section-title text-text-1">Import complete</h2>
+            </div>
+            <p className="text-meta" style={{ color: 'var(--text-tertiary)', marginBottom: 'var(--sp-md)' }}>
+              Format: {s.format} &middot; Import ID: {result.import_id.slice(0, 8)}&hellip;
+            </p>
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+                gap: 'var(--sp-sm)',
+              }}
+            >
+              <StatCard label="Books found" value={s.books_found} />
+              <StatCard label="New books" value={s.books_created} />
+              <StatCard label="Existing" value={s.books_existing} />
+              <StatCard label="Highlights" value={s.highlights_found} />
+              <StatCard label="New highlights" value={s.highlights_created} />
+              <StatCard label="Duplicates" value={s.highlights_skipped_duplicate} />
+              {s.notes_found > 0 && <StatCard label="Notes" value={s.notes_found} />}
+            </div>
+
+            {s.warnings.length > 0 && (
+              <details style={{ marginTop: 'var(--sp-md)' }}>
+                <summary className="text-meta" style={{ cursor: 'pointer', color: 'var(--warning)' }}>
+                  {s.warnings.length} warnings
+                </summary>
+                <div style={{ marginTop: 'var(--sp-sm)', maxHeight: '160px', overflowY: 'auto' }}>
+                  {s.warnings.map((w, i) => (
+                    <p key={i} className="text-meta" style={{ color: 'var(--text-tertiary)', marginBottom: '2px' }}>{w}</p>
+                  ))}
+                </div>
+              </details>
+            )}
           </div>
-          <p className="text-xs text-muted">Format: {s.format} &middot; Import ID: {result.import_id.slice(0, 8)}&hellip;</p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
-            <Stat label="Books found" value={s.books_found} />
-            <Stat label="New books" value={s.books_created} />
-            <Stat label="Existing books" value={s.books_existing} />
-            <Stat label="Highlights found" value={s.highlights_found} />
-            <Stat label="New highlights" value={s.highlights_created} />
-            <Stat label="Duplicates skipped" value={s.highlights_skipped_duplicate} />
-            {s.notes_found > 0 && <Stat label="Notes" value={s.notes_found} />}
-          </div>
-          {s.warnings.length > 0 && (
-            <details className="text-xs text-muted">
-              <summary className="cursor-pointer font-medium">{s.warnings.length} warnings</summary>
-              <ul className="mt-2 list-disc pl-4 space-y-1 max-h-40 overflow-y-auto">
-                {s.warnings.map((w, i) => <li key={i}>{w}</li>)}
-              </ul>
-            </details>
-          )}
         </div>
+
         <div className="flex gap-3">
-          <button onClick={() => router.push("/library")} className="btn-primary">View library</button>
-          <button onClick={() => router.push(`/imports/${result.import_id}`)} className="btn-secondary">View import details</button>
+          <button onClick={() => router.push("/library")} className="btn-prominent">View library</button>
+          <button onClick={() => router.push(`/imports/${result.import_id}`)} className="btn-secondary">View details</button>
           <button onClick={reset} className="btn-secondary">Import more</button>
         </div>
       </div>
     );
   }
 
+  // =========================================================================
   // Preview view
+  // =========================================================================
   if ((state === "previewed" || state === "importing") && preview) {
     return (
-      <div className="space-y-6">
-        <div className="bg-surface border border-border rounded-lg p-6 space-y-4">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-amber-500" />
-            <h2 className="font-semibold text-lg">Import preview</h2>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-lg)' }}>
+        <div className="surface-section">
+          <div className="flex items-center gap-2" style={{ marginBottom: 'var(--sp-md)' }}>
+            <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: 'var(--warning)' }} />
+            <h2 className="text-section-title text-text-1">Preview</h2>
           </div>
-          <p className="text-xs text-muted">
-            Format detected: <strong>{preview.format}</strong>
-            {filename && <> &middot; File: {filename}</>}
+          <p className="text-meta" style={{ color: 'var(--text-tertiary)', marginBottom: 'var(--sp-md)' }}>
+            Format: <strong style={{ color: 'var(--text-primary)' }}>{preview.format}</strong>
+            {filename && <> &middot; {filename}</>}
           </p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
-            <Stat label="Books" value={preview.books_detected} />
-            <Stat label="Highlights" value={preview.highlights_detected} />
-            <Stat label="Notes" value={preview.notes_detected} />
-            {preview.vocab_detected > 0 && <Stat label="Vocabulary" value={preview.vocab_detected} />}
-            {preview.parse_warnings_count > 0 && <Stat label="Warnings" value={preview.parse_warnings_count} />}
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+              gap: 'var(--sp-sm)',
+              marginBottom: 'var(--sp-lg)',
+            }}
+          >
+            <StatCard label="Books" value={preview.books_detected} />
+            <StatCard label="Highlights" value={preview.highlights_detected} />
+            <StatCard label="Notes" value={preview.notes_detected} />
+            {preview.vocab_detected > 0 && <StatCard label="Vocabulary" value={preview.vocab_detected} />}
+            {preview.parse_warnings_count > 0 && <StatCard label="Warnings" value={preview.parse_warnings_count} />}
           </div>
 
+          {/* Book list */}
           {preview.books.length > 0 && (
-            <div className="mt-4">
-              <h3 className="text-sm font-medium mb-2">Books to import</h3>
-              <div className="space-y-1 max-h-60 overflow-y-auto">
+            <div>
+              <p className="text-eyebrow" style={{ marginBottom: 'var(--sp-sm)' }}>Books to import</p>
+              <div style={{ maxHeight: '280px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 {preview.books.map((b, i) => (
-                  <div key={i} className="flex items-center justify-between text-sm py-1">
+                  <div key={i} className="surface-inset flex items-center justify-between">
                     <div className="min-w-0">
-                      <span className="font-medium truncate">{b.title}</span>
-                      {b.author && <span className="text-muted ml-1">— {b.author}</span>}
+                      <span className="text-body-em text-text-1" style={{ fontSize: 'var(--font-sub)' }}>{b.title}</span>
+                      {b.author && <span className="text-meta" style={{ color: 'var(--text-tertiary)', marginLeft: '8px' }}>— {b.author}</span>}
                     </div>
-                    <span className="text-xs text-muted whitespace-nowrap ml-3">
+                    <span className="text-chip-label" style={{ color: 'var(--text-tertiary)', whiteSpace: 'nowrap', marginLeft: '12px' }}>
                       {b.highlight_count}h{b.note_count > 0 && ` ${b.note_count}n`}
                     </span>
                   </div>
@@ -210,12 +238,17 @@ export function ImportForm() {
             </div>
           )}
 
+          {/* Warnings */}
           {preview.warnings.length > 0 && (
-            <details className="text-xs text-muted">
-              <summary className="cursor-pointer font-medium">{preview.warnings.length} warnings</summary>
-              <ul className="mt-2 list-disc pl-4 space-y-1 max-h-40 overflow-y-auto">
-                {preview.warnings.map((w, i) => <li key={i}>{w}</li>)}
-              </ul>
+            <details style={{ marginTop: 'var(--sp-md)' }}>
+              <summary className="text-meta" style={{ cursor: 'pointer', color: 'var(--warning)' }}>
+                {preview.warnings.length} warnings
+              </summary>
+              <div style={{ marginTop: 'var(--sp-sm)', maxHeight: '160px', overflowY: 'auto' }}>
+                {preview.warnings.map((w, i) => (
+                  <p key={i} className="text-meta" style={{ color: 'var(--text-tertiary)', marginBottom: '2px' }}>{w}</p>
+                ))}
+              </div>
             </details>
           )}
         </div>
@@ -224,7 +257,7 @@ export function ImportForm() {
           <button
             onClick={handleCommitImport}
             disabled={state === "importing"}
-            className="btn-primary"
+            className="btn-prominent"
           >
             {state === "importing" ? "Importing..." : "Confirm import"}
           </button>
@@ -234,48 +267,78 @@ export function ImportForm() {
     );
   }
 
+  // =========================================================================
   // Input view
+  // =========================================================================
   return (
-    <div className="space-y-8">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-xl)' }}>
       {/* File upload */}
-      <div>
-        <label className="block text-sm font-medium mb-2">Upload file</label>
-        <div
-          className="border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:border-muted transition-colors"
-          onClick={() => fileRef.current?.click()}
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={(e) => {
-            e.preventDefault();
-            const file = e.dataTransfer.files[0];
+      <div
+        className={`surface-section interactive`}
+        style={{
+          textAlign: 'center',
+          padding: 'var(--sp-2xl) var(--sp-lg)',
+          cursor: 'pointer',
+          borderStyle: 'dashed',
+          borderWidth: '2px',
+          borderColor: dragOver ? 'var(--accent)' : undefined,
+          background: dragOver ? 'rgba(109, 138, 168, 0.06)' : undefined,
+          transition: 'all 0.2s ease',
+        }}
+        onClick={() => fileRef.current?.click()}
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragOver(false);
+          const file = e.dataTransfer.files[0];
+          if (file) handlePreview("file", file);
+        }}
+      >
+        <svg
+          width="32"
+          height="32"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="var(--text-tertiary)"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{ margin: '0 auto var(--sp-md)' }}
+        >
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+          <polyline points="17 8 12 3 7 8" />
+          <line x1="12" y1="3" x2="12" y2="15" />
+        </svg>
+        <p className="text-body-em text-text-2" style={{ marginBottom: '4px' }}>
+          Drop your Kindle highlights file here
+        </p>
+        <p className="text-meta" style={{ color: 'var(--text-tertiary)' }}>
+          or click to browse
+        </p>
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".txt"
+          className="hidden"
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
             if (file) handlePreview("file", file);
           }}
-        >
-          <p className="text-muted text-sm">
-            Drop your Kindle highlights file here, or click to browse
-          </p>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".txt"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) handlePreview("file", file);
-            }}
-          />
-        </div>
+        />
       </div>
 
       {/* Divider */}
       <div className="flex items-center gap-4">
-        <div className="flex-1 h-px bg-border" />
-        <span className="text-xs text-muted">or paste text</span>
-        <div className="flex-1 h-px bg-border" />
+        <div className="flex-1" style={{ height: '1px', background: 'var(--border-subtle)' }} />
+        <span className="text-eyebrow" style={{ textTransform: 'lowercase', letterSpacing: 'normal', fontWeight: 400 }}>or paste text</span>
+        <div className="flex-1" style={{ height: '1px', background: 'var(--border-subtle)' }} />
       </div>
 
       {/* Paste area */}
       <div>
-        <label className="block text-sm font-medium mb-2" htmlFor="paste-area">
+        <label className="text-eyebrow" htmlFor="paste-area" style={{ display: 'block', marginBottom: 'var(--sp-sm)' }}>
           Paste highlights
         </label>
         <textarea
@@ -283,37 +346,54 @@ export function ImportForm() {
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder={"Paste your Kindle highlights here...\n\nSupports both My Clippings.txt and Kindle notebook exports."}
-          rows={12}
-          className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-sm font-mono placeholder:text-muted/50 focus:outline-none focus:ring-1 focus:ring-accent resize-y"
+          rows={10}
+          className="surface-field"
+          style={{
+            width: '100%',
+            resize: 'vertical',
+            fontFamily: 'var(--font-serif)',
+            fontSize: 'var(--font-body)',
+            lineHeight: '1.7',
+            color: 'var(--text-primary)',
+            minHeight: '200px',
+            outline: 'none',
+          }}
         />
-        <div className="flex items-center justify-between mt-3">
-          <p className="text-xs text-muted">
+        <div className="flex items-center justify-between" style={{ marginTop: 'var(--sp-sm)' }}>
+          <p className="text-meta" style={{ color: 'var(--text-tertiary)' }}>
             {text.length > 0 ? `${text.length.toLocaleString()} characters` : ""}
           </p>
           <button
             onClick={() => handlePreview("paste")}
             disabled={state === "previewing" || !text.trim()}
-            className="btn-primary"
+            className="btn-prominent"
           >
             {state === "previewing" ? "Analyzing..." : "Preview import"}
           </button>
         </div>
       </div>
 
+      {/* Error */}
       {state === "error" && (
-        <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 rounded-lg px-4 py-3 text-sm">
-          {errorMsg}
+        <div
+          className="surface-inset"
+          style={{
+            borderColor: 'rgba(208, 108, 99, 0.3)',
+            background: 'rgba(208, 108, 99, 0.08)',
+          }}
+        >
+          <p className="text-body" style={{ color: 'var(--negative)' }}>{errorMsg}</p>
         </div>
       )}
     </div>
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function StatCard({ label, value }: { label: string; value: number }) {
   return (
-    <div>
-      <span className="text-muted">{label}:</span>{" "}
-      <span className="font-medium">{value}</span>
+    <div className="surface-inset text-center">
+      <p className="text-eyebrow" style={{ marginBottom: '2px' }}>{label}</p>
+      <p className="text-body-em text-text-1">{value}</p>
     </div>
   );
 }

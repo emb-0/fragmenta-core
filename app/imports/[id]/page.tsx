@@ -16,73 +16,149 @@ export default async function ImportDetailPage({ params }: { params: Promise<{ i
   const summary: ImportSummary | null = imp.import_summary || null;
   const warnings = summary?.warnings || [];
   const status = imp.parse_status;
-  const statusColor = status === "completed" ? "text-green-600" : status === "failed" ? "text-red-600" : "text-amber-600";
+
+  const statusConfig = {
+    completed: { color: 'var(--success)', label: 'Completed' },
+    failed: { color: 'var(--negative)', label: 'Failed' },
+    processing: { color: 'var(--warning)', label: 'Processing' },
+    pending: { color: 'var(--warning)', label: 'Pending' },
+  }[status] || { color: 'var(--text-tertiary)', label: status };
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-12">
-      <Link href="/imports" className="text-sm text-muted hover:text-foreground transition-colors">
-        &larr; Import History
+    <div className="page-container">
+      {/* Back nav */}
+      <Link
+        href="/imports"
+        className="btn-ghost"
+        style={{ marginLeft: '-8px', marginBottom: 'var(--sp-md)' }}
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M10 12L6 8L10 4" />
+        </svg>
+        History
       </Link>
 
-      <div className="mt-6 mb-8">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {imp.filename || `Import ${imp.id.slice(0, 8)}`}
-        </h1>
-        <div className="flex items-center gap-4 mt-2 text-sm text-muted">
-          <span className={statusColor}>{status}</span>
-          <span>{imp.source_type}</span>
-          <span>{new Date(imp.created_at).toLocaleString()}</span>
+      {/* Header */}
+      <div className="surface-glass" style={{ marginBottom: 'var(--sp-xl)' }}>
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          <p className="text-eyebrow" style={{ marginBottom: 'var(--sp-sm)' }}>Import Detail</p>
+          <h1 className="text-section-title text-text-1" style={{ marginBottom: 'var(--sp-xs)' }}>
+            {imp.filename || `Import ${imp.id.slice(0, 8)}`}
+          </h1>
+          <div className="flex flex-wrap items-center gap-2" style={{ marginTop: 'var(--sp-sm)' }}>
+            <span className="chip" style={{ cursor: 'default', pointerEvents: 'none' }}>
+              <span
+                style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  backgroundColor: statusConfig.color,
+                  display: 'inline-block',
+                }}
+              />
+              {statusConfig.label}
+            </span>
+            <span className="chip" style={{ cursor: 'default', pointerEvents: 'none' }}>
+              {imp.source_type === 'kindle_notebook' ? 'Notebook' : 'Clippings'}
+            </span>
+            <span className="text-meta" style={{ color: 'var(--text-tertiary)' }}>
+              {new Date(imp.created_at).toLocaleString("en-US", {
+                month: "long",
+                day: "numeric",
+                year: "numeric",
+                hour: "numeric",
+                minute: "2-digit",
+              })}
+            </span>
+          </div>
         </div>
       </div>
 
+      {/* Summary */}
       {summary && (
-        <div className="bg-surface border border-border rounded-lg p-6 space-y-4 mb-8">
-          <h2 className="font-medium">Summary</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
-            {summary.format && <Stat label="Format" value={summary.format} />}
-            <Stat label="Books found" value={summary.books_found} />
-            <Stat label="New books" value={summary.books_created} />
-            <Stat label="Existing books" value={summary.books_existing} />
-            <Stat label="Highlights found" value={summary.highlights_found} />
-            <Stat label="New highlights" value={summary.highlights_created} />
-            <Stat label="Duplicates skipped" value={summary.highlights_skipped_duplicate} />
-            {(summary.notes_found || 0) > 0 && <Stat label="Notes" value={summary.notes_found} />}
-            {(summary.vocab_found || 0) > 0 && <Stat label="Vocabulary" value={summary.vocab_found} />}
+        <div className="surface-section" style={{ marginBottom: 'var(--sp-lg)' }}>
+          <p className="text-eyebrow" style={{ marginBottom: 'var(--sp-md)' }}>Summary</p>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+              gap: 'var(--sp-sm)',
+            }}
+          >
+            {summary.format && <StatCard label="Format" value={summary.format} />}
+            <StatCard label="Books found" value={summary.books_found} />
+            <StatCard label="New books" value={summary.books_created} />
+            <StatCard label="Existing books" value={summary.books_existing} />
+            <StatCard label="Highlights found" value={summary.highlights_found} />
+            <StatCard label="New highlights" value={summary.highlights_created} />
+            <StatCard label="Duplicates skipped" value={summary.highlights_skipped_duplicate} />
+            {(summary.notes_found || 0) > 0 && <StatCard label="Notes" value={summary.notes_found} />}
+            {(summary.vocab_found || 0) > 0 && <StatCard label="Vocabulary" value={summary.vocab_found} />}
           </div>
         </div>
       )}
 
+      {/* Error */}
       {imp.error_message && (
-        <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-8">
-          <h2 className="font-medium text-red-700 dark:text-red-300 text-sm mb-1">Error</h2>
-          <p className="text-sm text-red-600 dark:text-red-400">{imp.error_message}</p>
+        <div
+          className="surface-inset"
+          style={{
+            marginBottom: 'var(--sp-lg)',
+            borderColor: 'rgba(208, 108, 99, 0.3)',
+            background: 'rgba(208, 108, 99, 0.08)',
+          }}
+        >
+          <p className="text-eyebrow" style={{ marginBottom: '4px', color: 'var(--negative)' }}>Error</p>
+          <p className="text-body" style={{ color: 'var(--negative)' }}>{imp.error_message}</p>
         </div>
       )}
 
+      {/* Warnings */}
       {warnings.length > 0 && (
-        <div className="bg-surface border border-border rounded-lg p-6 mb-8">
-          <h2 className="font-medium mb-3">{warnings.length} Warnings</h2>
-          <ul className="text-sm text-muted space-y-1 list-disc pl-4 max-h-60 overflow-y-auto">
+        <div className="surface-section" style={{ marginBottom: 'var(--sp-lg)' }}>
+          <p className="text-eyebrow" style={{ marginBottom: 'var(--sp-sm)' }}>
+            {warnings.length} Warnings
+          </p>
+          <div
+            style={{
+              maxHeight: '240px',
+              overflowY: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '4px',
+            }}
+          >
             {warnings.map((w, i) => (
-              <li key={i}>{w}</li>
+              <p key={i} className="text-meta" style={{ color: 'var(--warning)' }}>
+                {w}
+              </p>
             ))}
-          </ul>
+          </div>
         </div>
       )}
 
-      <div className="text-xs text-muted">
-        <p>Import ID: {imp.id}</p>
-        <p>Raw text: {imp.raw_text.length.toLocaleString()} characters</p>
+      {/* Metadata */}
+      <div className="surface-inset">
+        <div className="flex flex-wrap gap-4">
+          <div>
+            <p className="text-eyebrow" style={{ marginBottom: '2px' }}>Import ID</p>
+            <p className="text-meta" style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)' }}>{imp.id}</p>
+          </div>
+          <div>
+            <p className="text-eyebrow" style={{ marginBottom: '2px' }}>Raw text</p>
+            <p className="text-meta" style={{ color: 'var(--text-tertiary)' }}>{imp.raw_text.length.toLocaleString()} characters</p>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
-function Stat({ label, value }: { label: string; value: string | number }) {
+function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="text-sm">
-      <span className="text-muted">{label}:</span>{" "}
-      <span className="font-medium">{value}</span>
+    <div className="surface-inset text-center">
+      <p className="text-eyebrow" style={{ marginBottom: '2px' }}>{label}</p>
+      <p className="text-body-em text-text-1">{value}</p>
     </div>
   );
 }
